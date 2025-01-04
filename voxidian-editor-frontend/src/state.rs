@@ -54,30 +54,36 @@ pub fn add_file(entry : &FileTreeEntry) {
 }
 
 pub fn open_file(id : u32) {
-    crate::code::selection_unchanged();
     let mut files = FILES.write();
     let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = files.get_mut(&id) else { return; };
     crate::code::remote_cursors::update();
+    let mut should_proper_update_cursor = true;
     match (is_open) {
         Some(Some(FileContents::NonText)) => { crate::code::open_nontext(); },
         Some(Some(FileContents::Text(_))) => { crate::code::open_monaco(id); },
         Some(None) => { crate::code::open_load(); },
         None => {
             *is_open = Some(None);
-        crate::ws::WS.send(OpenFileC2SPacket { id });
-        crate::code::open_load();
+            crate::ws::WS.send(OpenFileC2SPacket { id });
+            crate::code::open_load();
+            should_proper_update_cursor = false;
         }
     }
     crate::filetree::open(&path);
     crate::filetabs::open(id, &path);
-    crate::ws::WS.send(SelectionsC2SPacket {
-        selections : Some((id, vec![ SelectionRange {
-            start_line   : 1,
-            start_column : 1,
-            end_line     : 1,
-            end_column   : 1
-        } ]))
-    });
+    if (should_proper_update_cursor) {
+        crate::code::selection_changed();
+    } else {
+        crate::code::selection_unchanged();
+        crate::ws::WS.send(SelectionsC2SPacket {
+            selections : Some((id, vec![ SelectionRange {
+                start_line   : 1,
+                start_column : 1,
+                end_line     : 1,
+                end_column   : 1
+            } ]))
+        });
+    }
 }
 
 pub fn close_file(id : u32) {
