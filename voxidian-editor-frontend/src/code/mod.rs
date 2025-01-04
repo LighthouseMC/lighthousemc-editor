@@ -3,7 +3,7 @@ pub mod diffsync;
 pub mod remote_cursors;
 
 
-use crate::code::monaco::EditorSelection;
+use crate::code::monaco::{ EditorSelection, EditorPosition };
 use voxidian_editor_common::packet::c2s::{ SelectionsC2SPacket, SelectionRange };
 use std::sync::atomic::Ordering;
 use wasm_bindgen::prelude::*;
@@ -17,13 +17,12 @@ pub fn init() {
         if (remote_cursors::SELECTION_CHANGED.swap(false, Ordering::Relaxed)) {
             let editors = monaco::EDITORS.read();
             let selections = monaco::currently_focused().and_then(|currently_focused| editors.get(&currently_focused).map(|editor| (currently_focused, editor))).map(|(id, editor)| {
+                let model = editor.get_model();
                 (id, editor.get_selections().into_iter().map(|selection| {
                     let selection = serde_wasm_bindgen::from_value::<EditorSelection>(selection).unwrap();
                     SelectionRange {
-                        start_line   : selection.start_line,
-                        start_column : selection.start_column,
-                        end_line     : selection.end_line,
-                        end_column   : selection.end_column,
+                        start : model.get_offset_at(serde_wasm_bindgen::to_value(&EditorPosition { line : selection.start_line , column : selection.start_column }).unwrap()),
+                        end   : model.get_offset_at(serde_wasm_bindgen::to_value(&EditorPosition { line : selection.end_line   , column : selection.end_column   }).unwrap())
                     }
                 }).collect::<Vec<_>>())
             });

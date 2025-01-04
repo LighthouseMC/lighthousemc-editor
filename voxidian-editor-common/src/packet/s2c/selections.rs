@@ -24,10 +24,8 @@ impl PacketEncode for SelectionsS2CPacket {
             buf.encode_write(file_id);
             buf.encode_write(selections.len() as u32);
             for selection in selections {
-                buf.encode_write(selection.start_line   as u32);
-                buf.encode_write(selection.start_column as u32);
-                buf.encode_write(selection.end_line     as u32);
-                buf.encode_write(selection.end_column   as u32);
+                buf.encode_write(selection.start as u32);
+                buf.encode_write(selection.end   as u32);
             }
         } else {
             buf.encode_write(false);
@@ -46,10 +44,8 @@ impl PacketDecode for SelectionsS2CPacket {
                 let     len        = buf.read_decode::<u32>()? as usize;
                 let mut selections = Vec::with_capacity(len);
                 for _ in 0..len { selections.push(SelectionRange {
-                    start_line   : buf.read_decode::<u32>()? as usize,
-                    start_column : buf.read_decode::<u32>()? as usize,
-                    end_line     : buf.read_decode::<u32>()? as usize,
-                    end_column   : buf.read_decode::<u32>()? as usize
+                    start : buf.read_decode::<u32>()? as usize,
+                    end   : buf.read_decode::<u32>()? as usize
                 }); }
                 Some((file_id, selections))
             } else { None }

@@ -1,4 +1,4 @@
-use crate::code::monaco::{ self, Editor, EditorDecoration, EditorDecorationOptions, EditorSelection, EditorHoverMessage };
+use crate::code::monaco::{ self, Editor, EditorDecoration, EditorDecorationOptions, EditorSelection, EditorHoverMessage, EditorPosition };
 use voxidian_editor_common::packet::c2s::SelectionRange;
 use std::sync::atomic::AtomicBool;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
@@ -62,11 +62,14 @@ pub(crate) fn update() {
 
 
 pub(crate) fn update_known(file_id : u32, editor : &Editor) {
-    let mut new_decorations = Vec::new();
+    let model = editor.get_model();
 
+    let mut new_decorations = Vec::new();
     for (_, remote_selection) in &*REMOTE_SELECTIONS.read() {
         if (remote_selection.file_id == file_id) {
             for selection in &remote_selection.selections {
+                let start = serde_wasm_bindgen::from_value::<EditorPosition>(model.get_position_at(selection.start )).unwrap();
+                let end   = serde_wasm_bindgen::from_value::<EditorPosition>(model.get_position_at(selection.end   )).unwrap();
                 new_decorations.push(serde_wasm_bindgen::to_value(&EditorDecoration {
                     options : EditorDecorationOptions {
                         class_name    : format!("editor_code_remote_selection_{}", remote_selection.colour),
@@ -75,10 +78,10 @@ pub(crate) fn update_known(file_id : u32, editor : &Editor) {
                         stickiness    : 1
                     },
                     range   : EditorSelection {
-                        start_line   : selection.start_line,
-                        start_column : selection.start_column,
-                        end_line     : selection.end_line,
-                        end_column   : selection.end_column
+                        start_line   : start.line,
+                        start_column : start.column,
+                        end_line     : end.line,
+                        end_column   : end.column
                     }
                 }).unwrap());
             }

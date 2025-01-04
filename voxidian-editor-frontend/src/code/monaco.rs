@@ -1,5 +1,7 @@
+use crate::code::remote_cursors::REMOTE_SELECTIONS;
+use crate::code::diffsync;
 use std::cell::LazyCell;
-use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard };
+use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Arc, Mutex };
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::Element;
@@ -69,6 +71,10 @@ mod js { use super::*;
         /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#onDidChangeCursorSelection
         #[wasm_bindgen(method, js_name = "onDidChangeCursorSelection")]
         pub fn on_did_change_cursor_selection(this : &Editor, callback : &JsValue);
+
+        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#onDidChangeModelContent
+        #[wasm_bindgen(method, js_name = "onDidChangeModelContent")]
+        pub fn on_did_change_model_content(this : &Editor, callback : &JsValue);
     }
 
     #[wasm_bindgen]
@@ -191,6 +197,16 @@ pub struct EditorHoverMessage {
     pub value : String
 }
 
+#[derive(Ser, Deser, Debug)]
+pub struct SelectionChangedEvent {
+    reason : u8
+}
+#[derive(Ser, Deser, Debug)]
+pub struct ModelContentChangedEvent {
+    #[serde(rename = "isFlush")]
+    is_flush : bool
+}
+
 
 pub fn create(file_id : u32, initial_script : String, initial_language : String, open : bool) { // TODO: Edit history undo/redo
     require(move || {
@@ -236,13 +252,39 @@ pub fn create(file_id : u32, initial_script : String, initial_language : String,
         editor.on_did_change_model(change_model_callback.as_ref().unchecked_ref());
         change_model_callback.forget();
 
-        let change_selection_callback = Closure::<dyn FnMut(JsValue) -> ()>::new(move |_| {
-            if let Some(currently_focused) = currently_focused() && currently_focused == file_id {
-                super::selection_changed();
+        let change_selection_callback = Closure::<dyn FnMut(_) -> ()>::new(move |event : JsValue| {
+            let event = serde_wasm_bindgen::from_value::<SelectionChangedEvent>(event).unwrap();
+            if (event.reason != 1 && event.reason != 0) {
+                if let Some(currently_focused) = currently_focused() && currently_focused == file_id {
+                    super::selection_changed();
+                }
             }
         });
         editor.on_did_change_cursor_selection(change_selection_callback.as_ref().unchecked_ref());
         change_selection_callback.forget();
+
+        let old_content = Arc::new(Mutex::new(initial_script.clone()));
+        let change_model_content_callback = Closure::<dyn FnMut(_) -> ()>::new(move |event : JsValue| {
+            if let Some(editor) = EDITORS.read().get(&file_id) {
+                let event = serde_wasm_bindgen::from_value::<ModelContentChangedEvent>(event).unwrap();
+                let mut old_content = old_content.lock().unwrap();
+                let     new_content = editor.get_model().get_value(1);
+                if (! event.is_flush) {
+                    // Shift remote cursors.
+                    for (_, remote_selection) in &mut*REMOTE_SELECTIONS.write() {
+                        if (remote_selection.file_id == file_id) {
+                            for selection in &mut remote_selection.selections {
+                                (selection.start, selection.end) = diffsync::shift_selection(&old_content, &new_content, selection.start, selection.end);
+                            }
+                        }
+                    }
+                    super::selection_changed();
+                }
+                *old_content = new_content;
+            }
+        });
+        editor.on_did_change_model_content(change_model_content_callback.as_ref().unchecked_ref());
+        change_model_content_callback.forget();
 
         crate::code::remote_cursors::update_known(file_id, &editor);
 

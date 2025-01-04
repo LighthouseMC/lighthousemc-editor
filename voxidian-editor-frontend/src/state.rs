@@ -77,10 +77,8 @@ pub fn open_file(id : u32) {
         crate::code::selection_unchanged();
         crate::ws::WS.send(SelectionsC2SPacket {
             selections : Some((id, vec![ SelectionRange {
-                start_line   : 1,
-                start_column : 1,
-                end_line     : 1,
-                end_column   : 1
+                start : 0,
+                end   : 0
             } ]))
         });
     }

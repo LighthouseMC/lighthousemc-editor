@@ -2,7 +2,8 @@
 
 
 use crate::state::FilesEntryKind;
-use super::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
+use crate::code::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
+use crate::code::remote_cursors::{ self, REMOTE_SELECTIONS };
 use voxidian_editor_common::packet::s2c::FileContents;
 use voxidian_editor_common::packet::c2s::PatchFileC2SPacket;
 use voxidian_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };
@@ -60,14 +61,16 @@ pub fn apply_patches_from_server(file_id : u32, patches : Patches<Efficient>) {
             }).collect::<Vec<_>>();
 
             let dmp = DiffMatchPatch::new();
-            let (new_client_text, _) = dmp.patch_apply(&patches, &old_client_text).unwrap();
-            for selection in &mut selections {
-                // TODO: Fix cursor shifting.
-                let start = selection.start;
-                selection.start = check_cursor(&old_client_text, &new_client_text, selection.start, true);
-                selection.end   = check_cursor(&old_client_text, &new_client_text, selection.end, selection.end == start);
+            let mut intermediate_client_text = old_client_text;
+            for patch in patches {
+                let (new_client_text, _) = dmp.patch_apply(&vec![patch], &intermediate_client_text).unwrap();
+                // Shift local cursor.
+                for selection in &mut selections {
+                    (selection.start, selection.end) = shift_selection(&intermediate_client_text, &new_client_text, selection.start, selection.end);
+                }
+                intermediate_client_text = new_client_text;
             }
-            // TODO: Shift remote cursors
+            let new_client_text = intermediate_client_text;
 
             client_model.set_value(&new_client_text);
 
@@ -82,22 +85,98 @@ pub fn apply_patches_from_server(file_id : u32, patches : Patches<Efficient>) {
                 }).unwrap()
             }).collect::<Vec<_>>());
 
-            crate::code::remote_cursors::update_known(file_id, client_editor);
+            remote_cursors::update_known(file_id, client_editor);
 
             break;
         }
     }
 }
 
-fn check_cursor(old_client_text : &str, new_client_text : &str, index : usize, before : bool) -> usize {
-    let before    = before as usize;
-    let old_slice = old_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index + before).then(|| ch)).collect::<Vec<_>>();
-    let new_slice = new_client_text.chars().enumerate().filter_map(|(i, ch)| (i < index + before).then(|| ch)).collect::<Vec<_>>();
-    let is_front = old_slice != new_slice;
-    if (is_front) {
-        let diff = (old_client_text.chars().count() as isize) - (new_client_text.chars().count() as isize);
-        index.saturating_sub_signed(diff)
-    } else { index }
+pub fn shift_selection(old_client_text : &str, new_client_text : &str, start : usize, end : usize) -> (usize, usize) {
+    if (start > end) {
+        let (end, start) = shift_selection_unchecked(old_client_text, new_client_text, end, start);
+        (start, end)
+    } else {
+        shift_selection_unchecked(old_client_text, new_client_text, start, end)
+    }
+}
+fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, start : usize, end : usize) -> (usize, usize) {
+    let mut c = new_client_text.chars();
+    let slice_start   = old_client_text.chars().position(|ch| c.next() != Some(ch)).unwrap_or(old_client_text.len());
+    let mut c = new_client_text.chars().rev();
+    let slice_end_old = old_client_text.chars().rev().position(|ch| c.next() != Some(ch)).map(|i| old_client_text.len() - i).unwrap_or(0);
+    let mut c = old_client_text.chars().rev();
+    let slice_end_new = new_client_text.chars().rev().position(|ch| c.next() != Some(ch)).map(|i| new_client_text.len() - i).unwrap_or(0);
+    let a = start < slice_start;
+    let b = start < slice_end_new + 1;
+    let c = start < slice_end_old;
+    let d = start + 1 < slice_end_new;
+    let e = end < slice_start;
+    let f = end < slice_end_old + 1;
+    let g = end < slice_end_new + 1;
+    let h = end < slice_end_old;
+    let i = end < slice_end_new;
+    let j = end + 1 < slice_end_old;
+    let k = end + 1 < slice_end_new;
+    let delta = (slice_end_old as isize - slice_start as isize) - (slice_end_new as isize - slice_start as isize);
+    match ((a, b, c, d, e, f, g, h, i, j, k)) {
+
+        (false, false, false, false, false, false, false, false, false, false, false)
+        | (false, true, false, false, false, false, false, false, false, false, false)
+        | (true, true, false, false, false, false, false, false, false, false, false)
+        | (false, true, false, true, false, false, false, false, false, false, false)
+        | (false, false, false, false, false, true, false, false, false, false, false)
+        | (false, true, false, false, false, false, true, false, false, false, false)
+        | (false, true, false, false, false, true, true, false, true, false, false)
+        | (false, true, false, true, false, false, true, false, true, false, true)
+        | (false, true, false, true, false, true, true, false, true, false, true)
+        | (true, true, false, true, true, false, true, false, true, false, true)
+        => (start.saturating_sub_signed(delta), end.saturating_sub_signed(delta)), // Change entirely before selection
+
+        (true, true, true, true, false, false, false, false, false, false, false)
+        | (true, true, true, true, false, false, true, false, false, false, false)
+        | (false, true, true, false, false, false, false, false, false, false, false)
+        | (false, true, true, false, false, false, true, false, false, false, false)
+        | (true, true, true, false, false, false, false, false, false, false, false)
+        | (true, true, true, true, false, false, true, false, true, false, true)
+        | (true, true, true, true, false, false, true, false, true, false, false)
+        | (true, true, true, false, false, true, false, true, false, false, false)
+        | (true, true, false, true, false, false, false, false, false, false, false)
+        => (start, end.saturating_sub_signed(delta)), // Change entirely inside selection
+
+        (true, true, true, true, false, true, true, false, true, false, false)
+        | (true, true, true, true, true, true, true, false, true, false, false)
+        | (true, true, true, true, false, true, true, true, false, false, false)
+        | (true, true, true, true, true, true, true, true, false, false, false)
+        | (true, true, true, true, true, true, true, true, true, false, true)
+        | (true, true, true, true, true, true, true, true, true, true, false)
+        | (true, true, true, true, true, true, true, true, true, true, true)
+        | (true, true, true, true, false, true, true, false, true, false, true)
+        | (true, true, true, true, false, true, true, true, false, true, false)
+        | (true, true, false, true, false, false, true, false, false, false, false)
+        | (true, false, true, false, false, true, false, false, false, false, false)
+        => (start, end), // Change entirely after selection
+
+        (false, false, true, false, false, false, false, false, false, false, false)
+        => (slice_start, end.saturating_sub_signed(delta)), // Change crosses start of selection, but not end.
+
+        (true, true, true, true, false, true, false, false, false, false, false)
+        | (true, true, true, true, false, true, false, true, false, false, false)
+        | (true, true, true, true, false, true, false, true, false, true, false)
+        => (start, slice_end_new), // Change crosses end of selection, but not start
+
+        (false, true, true, false, false, true, false, false, false, false, false)
+        | (false, true, true, false, false, true, false, true, false, false, false)
+        | (false, false, true, false, false, true, false, false, false, false, false)
+        | (false, false, true, false, false, true, false, true, false, false, false)
+        | (false, false, true, false, false, true, false, true, false, true, false)
+        => (slice_end_new, slice_end_new), // Change entirely overwrites selection
+
+        _ => {
+            crate::warn(&format!("MISSING ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) MISSING", a, b, c, d, e, f, g, h, i, j, k));
+            (start, end)
+        }
+    }
 }
 
 pub struct Selection {
