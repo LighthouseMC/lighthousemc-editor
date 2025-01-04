@@ -1,8 +1,8 @@
 use voxidian_editor_common::packet::s2c::{ FileTreeEntry, FileContents };
 use voxidian_editor_common::packet::c2s::*;
 use std::cell::LazyCell;
-use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard };
-use std::collections::HashMap;
+use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
+use std::collections::{ HashMap, VecDeque };
 
 
 pub static FILES : FilesContainer = FilesContainer::new();
@@ -21,6 +21,9 @@ impl FilesContainer {
     }
 }
 unsafe impl Sync for FilesContainer { }
+
+
+static FILE_HISTORY : Mutex<VecDeque<u32>> = Mutex::new(VecDeque::new());
 
 
 #[derive(Debug)]
@@ -53,9 +56,12 @@ pub fn add_file(entry : &FileTreeEntry) {
     crate::filetree::add(&entry);
 }
 
-pub fn open_file(id : u32) {
+pub fn open_file(id : u32, remove_history : bool) -> bool {
+    if (remove_history) {
+        FILE_HISTORY.lock().unwrap().retain(|file| *file != id);
+    }
     let mut files = FILES.write();
-    let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = files.get_mut(&id) else { return; };
+    let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = files.get_mut(&id) else { return false; };
     crate::code::remote_cursors::update();
     let mut should_proper_update_cursor = true;
     match (is_open) {
@@ -82,9 +88,11 @@ pub fn open_file(id : u32) {
             } ]))
         });
     }
+    true
 }
 
 pub fn close_file(id : u32) {
+    FILE_HISTORY.lock().unwrap().push_back(id);
     let mut files = FILES.write();
     let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = files.get_mut(&id) else { return; };
     if let Some(_) = is_open {
@@ -95,5 +103,14 @@ pub fn close_file(id : u32) {
         crate::code::selection_changed();
         crate::code::remote_cursors::update();
         crate::ws::WS.send(CloseFileC2SPacket { id });
+    }
+}
+
+
+pub fn reopen_history() {
+    let mut history = FILE_HISTORY.lock().unwrap();
+    loop {
+        let Some(file_id) = history.pop_back() else { break };
+        if (open_file(file_id, false)) { break; }
     }
 }

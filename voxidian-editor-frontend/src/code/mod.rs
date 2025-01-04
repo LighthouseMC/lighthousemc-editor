@@ -7,9 +7,12 @@ use crate::code::monaco::{ EditorSelection, EditorPosition };
 use voxidian_editor_common::packet::c2s::{ SelectionsC2SPacket, SelectionRange };
 use std::sync::atomic::Ordering;
 use wasm_bindgen::prelude::*;
+use web_sys::KeyboardEvent;
 
 
 pub fn init() {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
 
     remote_cursors::init_css();
 
@@ -33,6 +36,39 @@ pub fn init() {
     });
     crate::set_interval(timeout_callback.as_ref().unchecked_ref(), 250);
     timeout_callback.forget();
+
+
+    let keydown_callback = Closure::<dyn FnMut(_) -> ()>::new(move |event : KeyboardEvent| {
+        match ((event.ctrl_key(), event.alt_key(), event.key().as_str())) {
+
+            (true, false, "s") => { event.prevent_default(); },
+
+            (true, false, "f") => { event.prevent_default(); },
+
+            (true, false, "w") => {
+                event.prevent_default();
+                if let Some(currently_focused) = crate::filetabs::currently_focused() {
+                    crate::state::close_file(currently_focused);
+                }
+            },
+
+            (true, false, "W") => {
+                event.prevent_default();
+                for file_id in crate::filetabs::list_all() {
+                    crate::state::close_file(file_id);
+                }
+            },
+
+            (true, false, "T") => {
+                event.prevent_default();
+                crate::state::reopen_history();
+            },
+
+            _ => { }
+        }
+    });
+    document.add_event_listener_with_callback("keydown", keydown_callback.as_ref().unchecked_ref()).unwrap();
+    keydown_callback.forget();
 
 }
 

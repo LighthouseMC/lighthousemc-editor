@@ -3,7 +3,7 @@
 
 use crate::state::FilesEntryKind;
 use crate::code::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
-use crate::code::remote_cursors::{ self, REMOTE_SELECTIONS };
+use crate::code::remote_cursors;
 use voxidian_editor_common::packet::s2c::FileContents;
 use voxidian_editor_common::packet::c2s::PatchFileC2SPacket;
 use voxidian_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };

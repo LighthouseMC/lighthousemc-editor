@@ -31,7 +31,7 @@ pub fn open(id : u32, path : &str) {
         let name = document.create_element("div").unwrap();
         name.class_list().toggle_with_force("editor_filetab_name", true).unwrap();
         name.set_inner_html(path.split("/").last().unwrap());
-        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::open_file(id));
+        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });
         name.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
         open_callback.forget();
 
@@ -147,4 +147,37 @@ pub fn overwrite(id : u32, path : &str, contents : &FileContents) {
             break;
         }
     }
+}
+
+
+pub fn currently_focused() -> Option<u32> {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    // File tab
+    let filetabs = document.get_element_by_id("editor_filetabs").unwrap();
+    let children = filetabs.children();
+    for i in 0..children.length() {
+        let tab = children.get_with_index(i).unwrap();
+        if (tab.id() == "editor_filetab_selected") {
+            return Some(tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u32>().unwrap());
+        }
+    }
+    None
+}
+
+pub fn list_all() -> Vec<u32> {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    let mut ids = Vec::new();
+
+    // File tab
+    let filetabs = document.get_element_by_id("editor_filetabs").unwrap();
+    let children = filetabs.children();
+    for i in 0..children.length() {
+        let tab = children.get_with_index(i).unwrap();
+        ids.push(tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u32>().unwrap());
+    }
+    ids
 }

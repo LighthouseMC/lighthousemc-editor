@@ -1,11 +1,11 @@
 use crate::iter::IteratorExt;
 use std::cell::LazyCell;
-use std::sync::{ Mutex, MutexGuard };
+use std::sync::{ Mutex, MutexGuard, RwLock };
 use std::collections::HashMap;
 use std::cmp::Ordering;
 use voxidian_editor_common::packet::s2c::FileTreeEntry;
 use wasm_bindgen::prelude::*;
-use web_sys::Element;
+use web_sys::{ Element, MouseEvent };
 
 
 static FILETREE : FileTreeRootContainer = FileTreeRootContainer::new();
@@ -29,6 +29,62 @@ impl FileTreeRootContainer {
 
 }
 unsafe impl Sync for FileTreeRootContainer { }
+
+
+const  COLLAPSE : i32          = 250;
+static RESIZING : RwLock<bool> = RwLock::new(false);
+
+pub fn init() {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    let hsplit = document.get_element_by_id("editor_resize_hsplit").unwrap();
+    let mousedown_callback = Closure::<dyn FnMut(_) -> ()>::new(move |_ : MouseEvent| {
+        *RESIZING.write().unwrap() = true;
+    });
+    hsplit.add_event_listener_with_callback("mousedown", mousedown_callback.as_ref().unchecked_ref()).unwrap();
+    mousedown_callback.forget();
+
+    let mouseup_callback = Closure::<dyn FnMut(_) -> ()>::new(move |_ : MouseEvent| {
+        let mut resizing = RESIZING.write().unwrap();
+        if (*resizing) {
+            let window   = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            document.body().unwrap().class_list().toggle_with_force("filetree_resize", false).unwrap();
+            document.body().unwrap().class_list().toggle_with_force("filetree_collapse", false).unwrap();
+        }
+        *resizing = false;
+    });
+    document.add_event_listener_with_callback("mouseup", mouseup_callback.as_ref().unchecked_ref()).unwrap();
+    mouseup_callback.forget();
+
+    let mousemove_callback = Closure::<dyn FnMut(_) -> ()>::new(move |event : MouseEvent| {
+        if (*RESIZING.read().unwrap()) {
+            let window   = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let client_x = event.client_x();
+            if (client_x <= COLLAPSE) {
+                document.body().unwrap().class_list().toggle_with_force("filetree_resize", false).unwrap();
+                document.body().unwrap().class_list().toggle_with_force("filetree_collapse", true).unwrap();
+            } else {
+                document.body().unwrap().class_list().toggle_with_force("filetree_resize", true).unwrap();
+                document.body().unwrap().class_list().toggle_with_force("filetree_collapse", false).unwrap();
+            }
+            let left = document.get_element_by_id("editor_left").unwrap();
+            let hsplit = document.get_element_by_id("editor_resize_hsplit").unwrap();
+            if (client_x < COLLAPSE / 2) {
+                left.set_attribute("style", "width: 0;").unwrap();
+                hsplit.class_list().toggle_with_force("filetree_collapse", true).unwrap();
+            } else {
+                let width = client_x.max(COLLAPSE);
+                left.set_attribute("style", &format!("width: {}px;", width)).unwrap();
+                hsplit.class_list().toggle_with_force("filetree_collapse", false).unwrap();
+            }
+        }
+    });
+    document.add_event_listener_with_callback("mousemove", mousemove_callback.as_ref().unchecked_ref()).unwrap();
+    mousemove_callback.forget();
+}
 
 
 pub fn clear() {
@@ -95,7 +151,7 @@ pub fn add(entry : &FileTreeEntry) {
         entry_root.append_child(&div).unwrap();
 
         let id = entry.id;
-        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::open_file(id));
+        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });
         div.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref()).unwrap();
         click_callback.forget();
 

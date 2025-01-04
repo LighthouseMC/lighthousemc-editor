@@ -25,6 +25,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn start() {
+    filetree::init();
     code::init();
     ws::start();
 }

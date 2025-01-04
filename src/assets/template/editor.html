@@ -20,6 +20,13 @@
                 width: 100%;
                 height: 100%;
                 background-color: #000000;
+                cursor: auto;
+            }
+            body.filetree_resize {
+                cursor: ew-resize;
+            }
+            body.filetree_collapse {
+                cursor: e-resize;
             }
             .hbox {
                 display: flex;
@@ -53,6 +60,12 @@
             #editor_resize_hsplit:hover, #editor_resize_hsplit:active {
                 border-right-color: rgba(128,128,128,1);
                 background-color: rgba(128,128,128,1);
+            }
+            #editor_resize_hsplit.filetree_collapse {
+                cursor: e-resize;
+            }
+            body.filetree_collapse #editor_resize_hsplit {
+                cursor: e-resize;
             }
             #editor_right #editor_right_container {
                 width: 100%;
@@ -514,7 +527,7 @@
             <div id="editor_left" class="vbox">
 
                 <div id="editor_subserver_properties">
-                    <div id="editor_subserver_name" onclick="open_subserver_properties_editor();"><span class="template_subserver_name"></span></div>
+                    <div id="editor_subserver_name"><span class="template_subserver_name"></span></div>
                     <div id="subserver_properties_editor">
                         <h1>Edit Subserver Properties</h1>
                         <hr />
@@ -539,7 +552,7 @@
 
             </div>
 
-            <button id="editor_resize_hsplit" onmousedown="start_dragging_filetree_resize();"></button>
+            <button id="editor_resize_hsplit"></button>
 
             <div id="editor_right">
                 <div id="editor_right_container" class="vbox">
@@ -583,47 +596,10 @@
         </div>
 
         <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script> <!-- Code editor -->
-        <script> // Code editor
-            /*document.addEventListener("keydown", function (event) { // TODO: Translate to Rust and add keybinds.
-                if (event.ctrlKey || event.altKey) {
-                    event.preventDefault();
-                }
-            });*/
-        </script>
 
         <script type="module"> // WASM
             import init, * as wasm from "/editor/voxidian_editor_frontend.js";
             init();
-        </script>
-
-        <script> // Drag to resize editor filetree. // TODO: Translate to Rust
-            /*const e_editor_left          = document.getElementById("editor_left");
-            const e_editor_resize_hsplit = document.getElementById("editor_resize_hsplit");
-            let dragging_filetree_resize = false;
-            function start_dragging_filetree_resize() {
-                dragging_filetree_resize = true;
-            }
-            document.addEventListener("mouseup", function(_) {
-                dragging_filetree_resize = false;
-                document.body.style.cursor = "auto";
-            });
-            const dragging_filetree_resize_collapse_threshold = 250;
-            document.addEventListener("mousemove", function(event) {
-                if (dragging_filetree_resize) {
-                    if (event.clientX < dragging_filetree_resize_collapse_threshold) {
-                        document.body.style.cursor = "e-resize";
-                        e_editor_resize_hsplit.style.cursor = "e-resize";
-                    } else {
-                        document.body.style.cursor = "ew-resize";
-                        e_editor_resize_hsplit.style.cursor = "ew-resize";
-                    }
-                    if (event.clientX < (dragging_filetree_resize_collapse_threshold / 2.0)) {
-                        e_editor_left.style.width = "0";
-                    } else {
-                        e_editor_left.style.width = Math.max(event.clientX, dragging_filetree_resize_collapse_threshold) + "px";
-                    }
-                }
-            });*/
         </script>
 
         <script> // Subserver properties editor // TODO: Translate to Rust
