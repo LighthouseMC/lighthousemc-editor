@@ -2,14 +2,14 @@ use crate::ws::WebSocketContainer;
 use crate::instance::EditorInstanceState;
 use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::*;
-use voxidian_editor_common::packet::c2s::C2SPackets;
+use voxidian_editor_common::packet::c2s::{ C2SPackets, SelectionRange };
 use voxidian_editor_common::dmp::{ DiffMatchPatch, Patches, PatchInput, Efficient };
 use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverFileID, DBSubserverID };
 use std::time::{ Instant, Duration };
 use std::sync::mpmc;
 use std::sync::Arc;
 use std::collections::HashMap;
-use std::str;
+use std::{ str, mem };
 use async_std::sync::RwLock;
 use async_std::stream::StreamExt;
 use async_std::task::{ block_on, spawn, yield_now, JoinHandle };
@@ -20,8 +20,8 @@ use uuid::Uuid;
 
 pub(super) struct MaybePendingEditorSession {
     pub(super) subserver   : DBSubserverID,
-    pub(super) player_uuid : Uuid,
-    pub(super) player_name : String,
+    pub(super) client_uuid : Uuid,
+    pub(super) client_name : String,
     pub(super) state       : MaybePendingEditorSessionState
 }
 pub(super) enum MaybePendingEditorSessionState {
@@ -63,6 +63,14 @@ enum EditorSessionOutgoingEvent {
     FileContentsPatchToClient {
         id          : DBSubserverFileID,
         server_text : String
+    },
+
+    /// Another client has updated their selection. Send it to the client.
+    SelectionsToClient {
+        client_id   : u64,
+        client_name : String,
+        colour      : u16,
+        selections  : Option<(DBSubserverFileID, Vec<SelectionRange>)>
     }
 
 }
@@ -75,41 +83,55 @@ enum EditorSessionIncomingEvent {
     FilePatchFromClient {
         id      : DBSubserverFileID,
         patches : Patches<Efficient>
+    },
+
+    /// Overwrites the previous client's editor selections.
+    SelectionsFromClient {
+        selections : Option<(DBSubserverFileID, Vec<SelectionRange>)>
     }
 
 }
 
 pub(super) struct EditorSessionHandle {
-    handle            : Option<JoinHandle<()>>,
-    outgoing_event_tx : mpmc::Sender<EditorSessionOutgoingEvent>,
-    incoming_event_rx : mpmc::Receiver<EditorSessionIncomingEvent>,
-    pending_patches   : Vec<(DBSubserverFileID, Patches<Efficient>)>,
-    stopped           : bool
+    client_name          : String,
+    task                 : Option<JoinHandle<()>>,
+    outgoing_event_tx    : mpmc::Sender<EditorSessionOutgoingEvent>,
+    incoming_event_rx    : mpmc::Receiver<EditorSessionIncomingEvent>,
+    pending_patches      : Vec<(DBSubserverFileID, Patches<Efficient>)>,
+    remote_cursor_colour : u16,
+    selections           : Option<(DBSubserverFileID, Vec<SelectionRange>)>,
+    selection_changed    : bool,
+    stopped              : bool
 }
 impl EditorSessionHandle {
-    pub fn new(subserver : DBSubserverID, state : Arc<RwLock<EditorInstanceState>>, ws : WebSocketContainer) -> Self {
+    pub fn new(client_uuid : Uuid, client_name : String, subserver : DBSubserverID, state : Arc<RwLock<EditorInstanceState>>, ws : WebSocketContainer) -> Self {
         let (outgoing_event_tx, outgoing_event_rx) = mpmc::channel();
         let (incoming_event_tx, incoming_event_rx) = mpmc::channel();
         let mut session = EditorSession::new(subserver, state, ws,
             outgoing_event_rx, incoming_event_tx
         );
         Self {
-            handle            : Some(spawn(async move {
+            client_name,
+            task                 : Some(spawn(async move {
                 let _ = session.run().await;
             })),
             outgoing_event_tx,
             incoming_event_rx,
-            pending_patches   : Vec::new(),
-            stopped           : false
+            pending_patches      : Vec::new(),
+            remote_cursor_colour : (client_uuid.as_u128() % 360) as u16,
+            selections           : None,
+            selection_changed    : false,
+            stopped              : false
         }
     }
 }
 impl EditorSessionHandle {
 
+    pub fn client_name(&self) -> &str { &self.client_name }
+
     pub fn pending_patches(&mut self) -> &mut Vec<(DBSubserverFileID, Patches<Efficient>)> {
         &mut self.pending_patches
     }
-
     pub fn patch_file_to_client(&self, id : DBSubserverFileID, server_text : String) {
         let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::FileContentsPatchToClient {
             id,
@@ -117,10 +139,25 @@ impl EditorSessionHandle {
         });
     }
 
+    pub fn remote_cursor_colour(&self) -> u16 { self.remote_cursor_colour }
+    pub fn pop_selection_changed(&mut self) -> bool {
+        mem::replace(&mut self.selection_changed, false)
+    }
+    pub fn selections(&self) -> &Option<(DBSubserverFileID, Vec<SelectionRange>)> {
+        &self.selections
+    }
+    pub fn selections_to_client(&self, client_id : u64, client_name : String, colour : u16, selections : Option<(DBSubserverFileID, Vec<SelectionRange>)>) {
+        let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::SelectionsToClient {
+            client_id,
+            client_name,
+            colour,
+            selections
+        });
+    }
+
     pub fn stop(&self, reason : EditorSessionStopReason) {
         let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::Stop(reason));
     }
-
     pub fn can_drop(&self) -> bool { self.stopped }
 
 }
@@ -131,13 +168,20 @@ impl EditorSessionHandle {
             while let Ok(event) = self.incoming_event_rx.try_recv() { match (event) {
 
                 EditorSessionIncomingEvent::Stop => {
+                    self.selections        = None;
+                    self.selection_changed = true;
                     self.stopped = true;
                     break;
                 },
 
                 EditorSessionIncomingEvent::FilePatchFromClient { id, patches } => {
-                    self.pending_patches.push((id, patches.clone())); // TODO: Use these
+                    self.pending_patches.push((id, patches.clone()));
                     let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::PatchShadow { id, patches });
+                },
+
+                EditorSessionIncomingEvent::SelectionsFromClient { selections } => {
+                    self.selections        = selections;
+                    self.selection_changed = true;
                 }
 
             } }
@@ -149,8 +193,16 @@ impl Drop for EditorSessionHandle {
     fn drop(&mut self) {
         self.stop(EditorSessionStopReason::SessionClosed);
         block_on(async {
-            self.handle.take().unwrap().await;
-            loop { if (self.can_drop()) { break; } }
+            loop {
+                self.update();
+                if (self.can_drop()) {
+                    if let Some(task) = self.task.take() {
+                        task.await;
+                    }
+                    break;
+                }
+                yield_now().await;
+            }
         })
     }
 }
@@ -175,9 +227,9 @@ impl EditorSession {
         incoming_event_tx : mpmc::Sender<EditorSessionIncomingEvent>
     ) -> Self { Self {
         subserver,
-        last_keepalive    : (Instant::now(), Ok(0)),
+        last_keepalive       : (Instant::now(), Ok(0)),
         state,
-        file_shadows      : HashMap::new(),
+        file_shadows         : HashMap::new(),
         ws,
         outgoing_event_rx,
         incoming_event_tx
@@ -245,6 +297,15 @@ impl EditorSession {
                             patches
                         }).await?;
                     }
+                },
+
+                EditorSessionOutgoingEvent::SelectionsToClient { client_id, client_name, colour, selections } => {
+                    self.send(SelectionsS2CPacket {
+                        client_id,
+                        client_name,
+                        colour,
+                        selections
+                    }).await?;
                 }
 
             } }
@@ -359,6 +420,13 @@ impl EditorSession {
                 let _ = self.incoming_event_tx.send(EditorSessionIncomingEvent::FilePatchFromClient {
                     id      : patch_file.id,
                     patches : patch_file.patches
+                });
+            },
+
+
+            C2SPackets::Selections(selections) => {
+                let _ = self.incoming_event_tx.send(EditorSessionIncomingEvent::SelectionsFromClient {
+                    selections : selections.selections
                 });
             }
 

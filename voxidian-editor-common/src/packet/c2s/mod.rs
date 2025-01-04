@@ -21,5 +21,5 @@ packet_group!{ pub enum C2SPackets {
     OpenFile(OpenFileC2SPacket),
     CloseFile(CloseFileC2SPacket),
     PatchFile(PatchFileC2SPacket),
-    //Selections(SelectionsC2SPacket)
+    Selections(SelectionsC2SPacket)
 } }

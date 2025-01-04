@@ -45,8 +45,8 @@ impl EditorInstanceManager {
 
             // Accept commands from the main server.
             while let Ok(handle_incoming) = self.handle_incoming_rx.try_recv() { match (handle_incoming) {
-                EditorHandleIncomingEvent::StartSession { timeout, subserver, player_uuid, player_name, session_code } => {
-                    self.start_session(&db, subserver, timeout, player_uuid, player_name, session_code);
+                EditorHandleIncomingEvent::StartSession { timeout, subserver, client_uuid, client_name, session_code } => {
+                    self.start_session(&db, subserver, timeout, client_uuid, client_name, session_code);
                 },
                 EditorHandleIncomingEvent::Stop => {
                     for (_, instance) in &mut self.instances {
@@ -63,14 +63,22 @@ impl EditorInstanceManager {
             // Accept new session logins.
             'accept_logins : while let Ok((ws, given_session_code)) = self.add_ws_rx.try_recv() {
                 'check_instances : for instance in self.instances.values_mut() {
-                    for session in instance.sessions.values_mut() {
+                    for session_id in instance.sessions.keys().map(|k| *k).collect::<Vec<_>>() {
+                        let session = &mut instance.sessions.get_mut(&session_id).unwrap();
                         if let MaybePendingEditorSessionState::Pending { session_code, .. } = &session.state {
                             if (&given_session_code == session_code || true) { // TODO: Disable this `true`
-                                trace!("{} logged in to editor session for subserver {}.", session.player_name, instance.subserver);
-                                session.state = MaybePendingEditorSessionState::Active(EditorSessionHandle::new(
+                                trace!("{} logged in to editor session for subserver {}.", session.client_name, instance.subserver);
+                                let handle = EditorSessionHandle::new(
+                                    session.client_uuid, session.client_name.clone(),
                                     session.subserver, instance.state.clone(),
                                     ws
-                                ));
+                                );
+                                for (other_session_id, other_session) in &instance.sessions {
+                                    if let MaybePendingEditorSessionState::Active(other_handle) = &other_session.state {
+                                        handle.selections_to_client(*other_session_id, other_handle.client_name().to_string(), other_handle.remote_cursor_colour(), other_handle.selections().clone());
+                                    }
+                                }
+                                instance.sessions.get_mut(&session_id).unwrap().state = MaybePendingEditorSessionState::Active(handle);
                                 continue 'accept_logins;
                             }
                             break 'check_instances;
@@ -93,9 +101,9 @@ impl EditorInstanceManager {
     }
 
 
-    fn start_session(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID, timeout : Duration, player_uuid : Uuid, player_name : String, session_code : String) {
+    fn start_session(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) {
         let instance = self.get_or_create_instance(db, subserver);
-        instance.start_session(subserver, timeout, player_uuid, player_name, session_code);
+        instance.start_session(subserver, timeout, client_uuid, client_name, session_code);
     }
 
 
@@ -106,8 +114,8 @@ impl EditorInstanceManager {
 ///  Multiple sessions can connect to it.
 struct EditorInstance {
     subserver    : DBSubserverID,
-    sessions     : HashMap<usize, MaybePendingEditorSession>,
-    next_session : usize,
+    sessions     : HashMap<u64, MaybePendingEditorSession>,
+    next_session : u64,
     state        : Arc<RwLock<EditorInstanceState>>
 }
 impl EditorInstance {
@@ -121,54 +129,47 @@ impl EditorInstance {
 impl EditorInstance {
 
 
-    fn start_session(&mut self, subserver : DBSubserverID, timeout : Duration, player_uuid : Uuid, player_name : String, session_code : String) {
+    fn start_session(&mut self, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) {
         // Shut down old sessions owned by this player.
         self.sessions.retain(|_, session| {
-            if (session.player_uuid == player_uuid) {match (&session.state) {
+            if (session.client_uuid == client_uuid) {match (&session.state) {
                 MaybePendingEditorSessionState::Pending { .. } => {
-                    trace!("Closed editor session for player {} subserver {}.", session.player_name, self.subserver);
+                    trace!("Closed editor session for player {} subserver {}.", session.client_name, self.subserver);
                     false
                 },
                 MaybePendingEditorSessionState::Active(handle) => { handle.stop(EditorSessionStopReason::LoggedInElsewhere); true },
             } } else { true }
         });
         // Start the new session.
-        trace!("{} opened an editor session for subserver {}.", player_name, subserver);
+        trace!("{} opened an editor session for subserver {}.", client_name, subserver);
         self.sessions.insert(self.next_session, MaybePendingEditorSession {
             subserver,
-            player_uuid,
-            player_name,
+            client_uuid,
+            client_name,
             state : MaybePendingEditorSessionState::Pending {
                 session_code,
                 expires_at   : Instant::now() + timeout
             }
         });
-        self.next_session += 1;
+        self.next_session = self.next_session.checked_add(1).unwrap();
     }
 
 
     fn update_sessions(&mut self) -> bool {
         // Update active sessions.
         for session in self.sessions.values_mut() {
-            match (&mut session.state) {
-                MaybePendingEditorSessionState::Pending { .. } =>  { },
-                MaybePendingEditorSessionState::Active(handle) => {
-                    handle.update();
-                }
+            if let MaybePendingEditorSessionState::Active(handle) = &mut session.state {
+                handle.update();
             }
         }
 
         // Pull together all queued patches and apply them to the Server Text.
-        // TODO: Only run this ever half a second.
         let mut all_patches = HashMap::new();
         for session in self.sessions.values_mut() {
-            match (&mut session.state) {
-                MaybePendingEditorSessionState::Pending { .. } => { },
-                MaybePendingEditorSessionState::Active(handle) => {
-                    let pending_patches = handle.pending_patches();
-                    for (file_id, patches) in pending_patches.drain(0..pending_patches.len()) {
-                        all_patches.entry(file_id).or_insert_with(|| Vec::new()).extend(patches);
-                    }
+            if let MaybePendingEditorSessionState::Active(handle) = &mut session.state {
+                let pending_patches = handle.pending_patches();
+                for (file_id, patches) in pending_patches.drain(0..pending_patches.len()) {
+                    all_patches.entry(file_id).or_insert_with(|| Vec::new()).extend(patches);
                 }
             }
         }
@@ -178,11 +179,8 @@ impl EditorInstance {
                     let dmp = DiffMatchPatch::new();
                     server_text = dmp.patch_apply(&patches, &server_text).unwrap().0;
                     for (_, session) in &self.sessions {
-                        match (&session.state) {
-                            MaybePendingEditorSessionState::Pending { .. } => { },
-                            MaybePendingEditorSessionState::Active(handle) => {
-                                handle.patch_file_to_client(file_id, server_text.clone());
-                            },
+                        if let MaybePendingEditorSessionState::Active(handle) = &session.state {
+                            handle.patch_file_to_client(file_id, server_text.clone());
                         }
                     }
                     *server_data = server_text.into_bytes();
@@ -190,14 +188,32 @@ impl EditorInstance {
             }
         }
 
-        // Remove any sessions.
+        // Broadcast selection updates.
+        for source_session_id in self.sessions.keys().map(|k| *k).collect::<Vec<_>>() {
+            if let MaybePendingEditorSessionState::Active(source_handle) = &mut self.sessions.get_mut(&source_session_id).unwrap().state {
+                if (source_handle.pop_selection_changed()) {
+                    let source_name       = source_handle.client_name().to_string();
+                    let source_colour     = source_handle.remote_cursor_colour();
+                    let source_selections = source_handle.selections().clone();
+                    for (target_session_id, target_session) in &mut self.sessions {
+                        if (*target_session_id != source_session_id) {
+                            if let MaybePendingEditorSessionState::Active(target_handle) = &mut target_session.state {
+                                target_handle.selections_to_client(source_session_id, source_name.clone(), source_colour, source_selections.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove any stopped sessions.
         self.sessions.retain(|_, session| {
             let retain = match (&session.state) {
                 MaybePendingEditorSessionState::Pending { expires_at, .. } => { Instant::now() < *expires_at },
                 MaybePendingEditorSessionState::Active(handle) => { ! handle.can_drop() },
             };
             if (! retain) {
-                trace!("Closed editor session for player {} subserver {}.", session.player_name, self.subserver);
+                trace!("Closed editor session for player {} subserver {}.", session.client_name, self.subserver);
             }
             retain
         });
@@ -214,13 +230,10 @@ impl EditorInstance {
     pub async fn stop(&mut self, reason : EditorSessionStopReason) {
         for (_, session) in &mut self.sessions {
             let mut can_exit = true;
-            match (&mut session.state) {
-                MaybePendingEditorSessionState::Pending { .. } =>  { },
-                MaybePendingEditorSessionState::Active(handle) => {
-                    handle.stop(reason);
-                    if (! handle.can_drop()) {
-                        can_exit = false;
-                    }
+            if let MaybePendingEditorSessionState::Active(handle) = &mut session.state {
+                handle.stop(reason);
+                if (! handle.can_drop()) {
+                    can_exit = false;
                 }
             }
             if (can_exit) { break; }

@@ -1,7 +1,8 @@
 #![feature(
     sync_unsafe_cell,
     iter_intersperse,
-    mixed_integer_ops_unsigned_sub
+    mixed_integer_ops_unsigned_sub,
+    let_chains
 )]
 
 
@@ -24,16 +25,23 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    code::remote_cursors::init_css();
+    code::init();
     ws::start();
+}
+
+
+#[wasm_bindgen]
+extern "C" {
+
+    #[wasm_bindgen(js_name = "setInterval")]
+    fn set_interval(callback : &JsValue, duration_ms : u32);
+
 }
 
 
 // TODO: Remove
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen]
-    fn alert(message : &str);
     #[wasm_bindgen(js_namespace = console)]
     fn warn(msg : &str);
     #[wasm_bindgen(js_namespace = console, js_name = warn)]

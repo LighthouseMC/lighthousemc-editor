@@ -39,16 +39,16 @@ pub fn send_patches_to_server() {
 }
 
 
-pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
+pub fn apply_patches_from_server(file_id : u32, patches : Patches<Efficient>) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
     let containers = document.get_elements_by_class_name("editor_code_container");
-    let id_string = id.to_string();
+    let id_string = file_id.to_string();
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
         if (container.get_attribute("editor_code_file_id").unwrap() == id_string) {
-            let client_editor   = &monaco::EDITORS.read()[&id];
+            let client_editor   = &monaco::EDITORS.read()[&file_id];
             let client_model    = client_editor.get_model();
             let old_client_text = client_model.get_value(1);
             let mut selections  = client_editor.get_selections().into_iter().map(|s| {
@@ -67,9 +67,10 @@ pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
                 selection.start = check_cursor(&old_client_text, &new_client_text, selection.start, true);
                 selection.end   = check_cursor(&old_client_text, &new_client_text, selection.end, selection.end == start);
             }
+            // TODO: Shift remote cursors
 
             client_model.set_value(&new_client_text);
-            
+
             client_editor.set_selections(selections.into_iter().map(|s| {
                 let start = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.start )).unwrap();
                 let end   = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.end   )).unwrap();
@@ -81,22 +82,7 @@ pub fn apply_patches_from_server(id : u32, patches : Patches<Efficient>) {
                 }).unwrap()
             }).collect::<Vec<_>>());
 
-            /*client_model.delta_decorations(vec![], vec![
-                serde_wasm_bindgen::to_value(&super::monaco::EditorDecoration {
-                    options : super::monaco::EditorDecorationOptions {
-                        class_name    : "editor_code_remote_selection_18".to_string(),
-                        hover_message : super::monaco::EditorHoverMessage { value : "Random person".to_string() },
-                        is_whole_line : false,
-                        stickiness    : 1
-                    },
-                    range   : EditorSelection {
-                        start_line   : 2,
-                        start_column : 2,
-                        end_line     : 2,
-                        end_column   : 2
-                    }
-                }).unwrap()
-            ]);*/
+            crate::code::remote_cursors::update_known(file_id, client_editor);
 
             break;
         }

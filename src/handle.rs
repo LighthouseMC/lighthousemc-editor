@@ -11,8 +11,8 @@ pub(crate) enum EditorHandleIncomingEvent {
     StartSession {
         subserver    : DBSubserverID,
         timeout      : Duration,
-        player_uuid  : Uuid,
-        player_name  : String,
+        client_uuid  : Uuid,
+        client_name  : String,
         session_code : String
     },
 
@@ -37,15 +37,15 @@ impl EditorHandle {
     /// Starts an editor session for the given subserver.
     /// The connection will be displayed in editor as the given display name.
     /// If a connection is not established within the given timeout duration, the session is cancelled.
-    pub fn start_session<const PW_LEN : usize>(&self, subserver : DBSubserverID, timeout : Duration, player_uuid : Uuid, player_name : String) -> String {
+    pub fn start_session<const PW_LEN : usize>(&self, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String) -> String {
         let mut bytes = [0; PW_LEN];
         rand_priv_bytes(&mut bytes).unwrap();
         let session_code = bytes.map(|byte| rand_byte_to_char(byte)).into_iter().collect::<String>();
         let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::StartSession {
             subserver,
             timeout,
-            player_uuid,
-            player_name,
+            client_uuid,
+            client_name,
             session_code : session_code.clone()
         });
         session_code

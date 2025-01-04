@@ -24,5 +24,5 @@ packet_group!{ pub enum S2CPackets {
     InitialState(InitialStateS2CPacket),
     OvewriteFile(OverwriteFileS2CPacket),
     PatchFile(PatchFileS2CPacket),
-    //Selections(SelectionsS2CPacket)
+    Selections(SelectionsS2CPacket)
 } }

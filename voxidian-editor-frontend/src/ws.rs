@@ -1,4 +1,5 @@
 use crate::state::{ FilesEntry, FilesEntryKind };
+use crate::code::remote_cursors::RemoteSelection;
 use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::{ S2CPackets, FileContents };
 use voxidian_editor_common::packet::c2s::*;
@@ -11,15 +12,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::{ WebSocket, BinaryType, MessageEvent, ErrorEvent };
 use web_sys::HtmlInputElement;
 use js_sys::{ ArrayBuffer, Uint8Array };
-
-
-#[wasm_bindgen]
-extern "C" {
-
-    #[wasm_bindgen(js_name = "setInterval")]
-    fn set_interval(callback : &JsValue, duration_ms : u32);
-
-}
 
 
 pub static KEEPALIVE_INDEX : AtomicU64 = AtomicU64::new(0);
@@ -108,7 +100,7 @@ fn on_ws_open() {
     let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
         crate::code::diffsync::send_patches_to_server();
     });
-    set_interval(timeout_callback.as_ref().unchecked_ref(), 250);
+    crate::set_interval(timeout_callback.as_ref().unchecked_ref(), 250);
     timeout_callback.forget();
 }
 
@@ -199,6 +191,21 @@ fn on_ws_message(e : MessageEvent) {
                 *old_client_shadow = new_client_shadow;
                 crate::code::diffsync::apply_patches_from_server(patch_file.id, patch_file.patches);
             }
+        },
+
+
+        S2CPackets::Selections(selections_event) => {
+            if let Some((file_id, selections)) = selections_event.selections {
+                crate::code::remote_cursors::REMOTE_SELECTIONS.write().insert(selections_event.client_id, RemoteSelection {
+                    client_name : selections_event.client_name,
+                    colour      : selections_event.colour,
+                    file_id,
+                    selections,
+                });
+            } else {
+                crate::code::remote_cursors::REMOTE_SELECTIONS.write().remove(&selections_event.client_id);
+            }
+            crate::code::remote_cursors::update();
         }
 
 

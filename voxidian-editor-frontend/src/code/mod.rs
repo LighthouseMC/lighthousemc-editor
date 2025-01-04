@@ -3,6 +3,41 @@ pub mod diffsync;
 pub mod remote_cursors;
 
 
+use crate::code::monaco::EditorSelection;
+use voxidian_editor_common::packet::c2s::{ SelectionsC2SPacket, SelectionRange };
+use std::sync::atomic::Ordering;
+use wasm_bindgen::prelude::*;
+
+
+pub fn init() {
+
+    remote_cursors::init_css();
+
+    let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
+        if (remote_cursors::SELECTION_CHANGED.swap(false, Ordering::Relaxed)) {
+            let editors = monaco::EDITORS.read();
+            let selections = monaco::currently_focused().and_then(|currently_focused| editors.get(&currently_focused).map(|editor| (currently_focused, editor))).map(|(id, editor)| {
+                (id, editor.get_selections().into_iter().map(|selection| {
+                    let selection = serde_wasm_bindgen::from_value::<EditorSelection>(selection).unwrap();
+                    SelectionRange {
+                        start_line   : selection.start_line,
+                        start_column : selection.start_column,
+                        end_line     : selection.end_line,
+                        end_column   : selection.end_column,
+                    }
+                }).collect::<Vec<_>>())
+            });
+            crate::ws::WS.send(SelectionsC2SPacket {
+                selections
+            });
+        }
+    });
+    crate::set_interval(timeout_callback.as_ref().unchecked_ref(), 250);
+    timeout_callback.forget();
+
+}
+
+
 pub fn open_noopen() { open("editor_right_main_noopen"); }
 
 pub fn open_nontext() { open("editor_right_main_nontext"); }
@@ -43,4 +78,12 @@ fn close() {
         let child = children.get_with_index(i).unwrap();
         child.class_list().toggle_with_force("editor_right_main_selected", false).unwrap();
     }
+}
+
+
+pub fn selection_changed() {
+    remote_cursors::SELECTION_CHANGED.store(true, Ordering::Relaxed);
+}
+pub fn selection_unchanged() {
+    remote_cursors::SELECTION_CHANGED.store(false, Ordering::Relaxed);
 }

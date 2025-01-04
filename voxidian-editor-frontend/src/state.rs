@@ -54,8 +54,10 @@ pub fn add_file(entry : &FileTreeEntry) {
 }
 
 pub fn open_file(id : u32) {
+    crate::code::selection_unchanged();
     let mut files = FILES.write();
     let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = files.get_mut(&id) else { return; };
+    crate::code::remote_cursors::update();
     match (is_open) {
         Some(Some(FileContents::NonText)) => { crate::code::open_nontext(); },
         Some(Some(FileContents::Text(_))) => { crate::code::open_monaco(id); },
@@ -68,6 +70,14 @@ pub fn open_file(id : u32) {
     }
     crate::filetree::open(&path);
     crate::filetabs::open(id, &path);
+    crate::ws::WS.send(SelectionsC2SPacket {
+        selections : Some((id, vec![ SelectionRange {
+            start_line   : 1,
+            start_column : 1,
+            end_line     : 1,
+            end_column   : 1
+        } ]))
+    });
 }
 
 pub fn close_file(id : u32) {
@@ -78,6 +88,8 @@ pub fn close_file(id : u32) {
         let path = path.clone();
         drop(files);
         crate::filetabs::close(&path);
+        crate::code::selection_changed();
+        crate::code::remote_cursors::update();
         crate::ws::WS.send(CloseFileC2SPacket { id });
     }
 }

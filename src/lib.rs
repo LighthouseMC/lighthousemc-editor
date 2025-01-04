@@ -102,7 +102,7 @@ impl EditorServer {
     }
 
 
-    async fn handle_editor_ws(req : Request<()>, mut ws : WebSocketConnection, bind_addr : SocketAddr, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
+    async fn handle_editor_ws(_ : Request<()>, mut ws : WebSocketConnection, _ : SocketAddr, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
         /*if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
             return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }*/ // TODO: Fix this

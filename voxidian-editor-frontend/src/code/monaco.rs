@@ -36,10 +36,6 @@ mod js { use super::*;
 
         pub(super) fn require(from : &JsValue, callback : &JsValue);
 
-        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#getModel.getModel-1
-        #[wasm_bindgen(js_namespace = ["monaco", "editor"], js_name = "onDidCreateEditor")]
-        pub(super) fn on_did_create_editor(callback : &JsValue);
-
     }
 
     #[wasm_bindgen]
@@ -65,6 +61,14 @@ mod js { use super::*;
         /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#getModel.getModel-1
         #[wasm_bindgen(method, js_name = "getModel")]
         pub fn get_model(this : &Editor) -> EditorModel;
+
+        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#onDidChangeModel
+        #[wasm_bindgen(method, js_name = "onDidChangeModel")]
+        pub fn on_did_change_model(this : &Editor, callback : &JsValue);
+
+        /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html#onDidChangeCursorSelection
+        #[wasm_bindgen(method, js_name = "onDidChangeCursorSelection")]
+        pub fn on_did_change_cursor_selection(this : &Editor, callback : &JsValue);
     }
 
     #[wasm_bindgen]
@@ -89,11 +93,12 @@ mod js { use super::*;
 
         /// https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.ITextModel.html#deltaDecorations.deltaDecorations-1
         #[wasm_bindgen(method, js_name = "deltaDecorations")]
-        pub fn delta_decorations(this : &EditorModel, old_decorations : Vec<String>, new_decorations : Vec<JsValue>) -> JsValue;
+        pub fn delta_decorations(this : &EditorModel, old_decorations : Vec<String>, new_decorations : Vec<JsValue>) -> Vec<String>;
 
     }
 
 }
+pub use js::Editor;
 
 
 #[derive(Ser, Deser)]
@@ -137,7 +142,7 @@ struct EditorConfigMinimap {
     size        : String
 }
 
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorSelection {
     #[serde(rename = "startLineNumber")]
     pub start_line   : usize,
@@ -148,7 +153,7 @@ pub struct EditorSelection {
     #[serde(rename = "endColumn")]
     pub end_column   : usize
 }
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorSetSelection {
     #[serde(rename = "selectionStartLineNumber")]
     pub start_line   : usize,
@@ -159,19 +164,19 @@ pub struct EditorSetSelection {
     #[serde(rename = "positionColumn")]
     pub end_column   : usize
 }
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorPosition {
     #[serde(rename = "lineNumber")]
     pub line   : usize,
     pub column : usize
 }
 
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorDecoration {
     pub options : EditorDecorationOptions,
     pub range   : EditorSelection
 }
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorDecorationOptions {
     #[serde(rename = "className")]
     pub class_name    : String,
@@ -181,20 +186,20 @@ pub struct EditorDecorationOptions {
     pub is_whole_line : bool,
     pub stickiness    : u8
 }
-#[derive(Ser, Deser)]
+#[derive(Ser, Deser, Debug)]
 pub struct EditorHoverMessage {
     pub value : String
 }
 
 
-pub fn create(id : u32, initial_script : String, initial_language : String, open : bool) { // TODO: Edit history undo/redo
+pub fn create(file_id : u32, initial_script : String, initial_language : String, open : bool) { // TODO: Edit history undo/redo
     require(move || {
         let window   = web_sys::window().unwrap();
         let document = window.document().unwrap();
 
         let container = document.create_element("div").unwrap();
         container.class_list().toggle_with_force("editor_code_container", true).unwrap();
-        container.set_attribute("editor_code_file_id", &id.to_string()).unwrap();
+        container.set_attribute("editor_code_file_id", &file_id.to_string()).unwrap();
 
         let code = document.create_element("div").unwrap();
         code.class_list().toggle_with_force("editor_code", true).unwrap();
@@ -224,8 +229,24 @@ pub fn create(id : u32, initial_script : String, initial_language : String, open
             smooth_scrolling          : true
         };
         let editor = js::editor_create(&code, &serde_wasm_bindgen::to_value(&config).unwrap());
-        // TODO: events
-        EDITORS.write().insert(id, editor);
+
+        let change_model_callback = Closure::<dyn FnMut(_) -> ()>::new(move |_ : js::Editor| {
+            crate::code::remote_cursors::update();
+        });
+        editor.on_did_change_model(change_model_callback.as_ref().unchecked_ref());
+        change_model_callback.forget();
+
+        let change_selection_callback = Closure::<dyn FnMut(JsValue) -> ()>::new(move |_| {
+            if let Some(currently_focused) = currently_focused() && currently_focused == file_id {
+                super::selection_changed();
+            }
+        });
+        editor.on_did_change_cursor_selection(change_selection_callback.as_ref().unchecked_ref());
+        change_selection_callback.forget();
+
+        crate::code::remote_cursors::update_known(file_id, &editor);
+
+        EDITORS.write().insert(file_id, editor);
     });
 }
 
@@ -260,6 +281,21 @@ pub fn destroy(id : u32) {
     }
 
     EDITORS.write().remove(&id);
+}
+
+
+pub fn currently_focused() -> Option<u32> {
+    let window   = web_sys::window().unwrap();
+    let document = window.document().unwrap();
+
+    let containers = document.get_elements_by_class_name("editor_code_container");
+    for i in 0..containers.length() {
+        let container = containers.get_with_index(i).unwrap();
+        if (container.class_list().contains("editor_right_main_selected")) {
+            return Some(container.get_attribute("editor_code_file_id").unwrap().parse::<u32>().unwrap());
+        }
+    }
+    None
 }
 
 
