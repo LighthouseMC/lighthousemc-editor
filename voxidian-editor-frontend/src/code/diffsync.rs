@@ -131,6 +131,8 @@ fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, sta
         | (false, true, false, true, false, false, true, false, true, false, true)
         | (false, true, false, true, false, true, true, false, true, false, true)
         | (true, true, false, true, true, false, true, false, true, false, true)
+        | (true, true, false, false, true, false, true, false, false, false, false)
+        | (true, false, false, false, true, true, false, false, false, false, false)
         => (start.saturating_sub_signed(delta), end.saturating_sub_signed(delta)), // Change entirely before selection
 
         (true, true, true, true, false, false, false, false, false, false, false)
@@ -155,6 +157,7 @@ fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, sta
         | (true, true, true, true, false, true, true, true, false, true, false)
         | (true, true, false, true, false, false, true, false, false, false, false)
         | (true, false, true, false, false, true, false, false, false, false, false)
+        | (true, true, true, false, true, true, true, true, true, true, false)
         => (start, end), // Change entirely after selection
 
         (false, false, true, false, false, false, false, false, false, false, false)
