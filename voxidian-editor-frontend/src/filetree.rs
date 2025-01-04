@@ -77,7 +77,7 @@ pub fn add(entry : &FileTreeEntry) {
     } else {
 
         let div = document.create_element("div").unwrap();
-        div.set_inner_html(&format!("<i class=\"devicon-bash-plain noicon\"></i> {}", filename));
+        div.set_inner_html(&format!("<i></i> {}", filename));
         let icon_classlist = div.query_selector("i").unwrap().unwrap().class_list();
         match (filename_to_icon(filename)) {
             None => {
