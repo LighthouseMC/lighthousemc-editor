@@ -208,7 +208,8 @@ pub struct ModelContentChangedEvent {
 }
 
 
-pub fn create(file_id : u32, initial_script : String, initial_language : String, open : bool) { // TODO: Edit history undo/redo
+pub fn create(file_id : u32, file_name : &str, initial_script : String, open : bool) { // TODO: Edit history undo/redo
+    let initial_language = filename_to_language(file_name);
     require(move || {
         let window   = web_sys::window().unwrap();
         let document = window.document().unwrap();
@@ -228,7 +229,7 @@ pub fn create(file_id : u32, initial_script : String, initial_language : String,
 
         let config = EditorConfig {
             value                     : initial_script.clone(),
-            language                  : initial_language.clone(),
+            language                  : initial_language.to_string(),
             theme                     : "hc-black".to_string(),
             auto_detect_high_contrast : false,
             automatic_layout          : true,
@@ -350,4 +351,19 @@ fn require<F : Fn() -> () + 'static>(f : F) {
     let callback = Closure::<dyn FnMut() -> ()>::new(move || f());
     js::require(from.unchecked_ref(), callback.as_ref().unchecked_ref());
     callback.forget();
+}
+
+
+pub fn filename_to_language(filename : &str) -> &'static str {
+    if let Some(split) = filename.chars().position(|ch| ch == '.') {
+        let (_, ext) = filename.split_at(split + 1);
+        match (ext) {
+            // Bash
+            "sh" => "shell",
+            // Rust
+            "rs" => "rust",
+
+            _ => "plaintext"
+        }
+    } else { "plaintext" }
 }

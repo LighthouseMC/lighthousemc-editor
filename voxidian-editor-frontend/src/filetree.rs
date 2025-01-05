@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 use voxidian_editor_common::packet::s2c::FileTreeEntry;
 use wasm_bindgen::prelude::*;
-use web_sys::{ Element, MouseEvent };
+use web_sys::{ DomTokenList, Element, MouseEvent };
 
 
 static FILETREE : FileTreeRootContainer = FileTreeRootContainer::new();
@@ -134,20 +134,8 @@ pub fn add(entry : &FileTreeEntry) {
 
         let div = document.create_element("div").unwrap();
         div.set_inner_html(&format!("<i></i> {}", filename));
-        let icon_classlist = div.query_selector("i").unwrap().unwrap().class_list();
-        match (filename_to_icon(filename)) {
-            None => {
-                icon_classlist.toggle_with_force("noicon", true).unwrap();
-                icon_classlist.toggle_with_force("devicon-bash-plain", true).unwrap();
-            },
-            Some((icon, coloured)) => {
-                icon_classlist.toggle_with_force("icon", true).unwrap();
-                icon_classlist.toggle_with_force(icon, true).unwrap();
-                if (coloured) {
-                    icon_classlist.toggle_with_force("colored", true).unwrap();
-                }
-            }
-        }
+        let icon = div.query_selector("i").unwrap().unwrap();
+        set_filename_icon_classes(filename, &icon.class_list());
         entry_root.append_child(&div).unwrap();
 
         let id = entry.id;
@@ -224,6 +212,21 @@ pub fn close(path : &str) {
 }
 
 
+pub fn set_filename_icon_classes(filename : &str, classlist : &DomTokenList) {
+    match (filename_to_icon(filename)) {
+        None => {
+            classlist.toggle_with_force("noicon", true).unwrap();
+            classlist.toggle_with_force("devicon-bash-plain", true).unwrap();
+        },
+        Some((icon, coloured)) => {
+            classlist.toggle_with_force("icon", true).unwrap();
+            classlist.toggle_with_force(icon, true).unwrap();
+            if (coloured) {
+                classlist.toggle_with_force("colored", true).unwrap();
+            }
+        }
+    }
+}
 fn filename_to_icon(filename : &str) -> Option<(&'static str, bool)> {
     if let Some(split) = filename.chars().position(|ch| ch == '.') {
         let (_, ext) = filename.split_at(split + 1);

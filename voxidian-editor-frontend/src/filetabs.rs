@@ -24,26 +24,35 @@ pub fn open(id : u32, path : &str) {
     }
     found.unwrap_or_else(|| {
         let div = document.create_element("div").unwrap();
-        div.class_list().toggle_with_force("hbox", true).unwrap();
         div.set_attribute("editor_filetab_file_id", &id.to_string()).unwrap();
         div.set_attribute("editor_filetab_file_path", path).unwrap();
 
+        let filename = path.split("/").last().unwrap();
+        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });
+
+        let icon = document.create_element("div").unwrap();
+        icon.class_list().toggle_with_force("editor_filetab_icon", true).unwrap();
+        let icon_inner = document.create_element("i").unwrap();
+        crate::filetree::set_filename_icon_classes(filename, &icon_inner.class_list());
+        icon.append_child(&icon_inner).unwrap();
+        div.append_child(&icon).unwrap();
+        icon.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
+
         let name = document.create_element("div").unwrap();
         name.class_list().toggle_with_force("editor_filetab_name", true).unwrap();
-        name.set_inner_html(path.split("/").last().unwrap());
-        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });
+        name.set_inner_html(filename);
+        div.append_child(&name).unwrap();
         name.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
         open_callback.forget();
 
         let close = document.create_element("div").unwrap();
         close.class_list().toggle_with_force("editor_filetab_close", true).unwrap();
         close.set_inner_html("×");
+        div.append_child(&close).unwrap();
         let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(id));
         close.add_event_listener_with_callback("click", close_callback.as_ref().unchecked_ref()).unwrap();
         close_callback.forget();
 
-        div.append_child(&name).unwrap();
-        div.append_child(&close).unwrap();
         filetabs.insert_before(&div, before.as_ref()).unwrap();
         div
     }).set_id("editor_filetab_selected");
@@ -133,15 +142,16 @@ pub fn overwrite(id : u32, path : &str, contents : &FileContents) {
     for i in 0..children.length() {
         let tab = children.get_with_index(i).unwrap();
         if (tab.get_attribute("editor_filetab_file_path").unwrap() == path) {
+            let file_name = path.split("/").last().unwrap();
             if (tab.id() == "editor_filetab_selected") {
                 match (contents) {
                     FileContents::NonText => { crate::code::open_nontext(); },
-                    FileContents::Text(text) => { crate::code::create_monaco(id, text, true) },
+                    FileContents::Text(text) => { crate::code::create_monaco(id, file_name, text, true) },
                 }
             } else {
                 match (contents) {
                     FileContents::NonText => { },
-                    FileContents::Text(text) => { crate::code::create_monaco(id, text, false) },
+                    FileContents::Text(text) => { crate::code::create_monaco(id, file_name, text, false) },
                 }
             }
             break;

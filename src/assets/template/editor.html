@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head id="head">
-        <title>LighthouseMC Editor</title>
+        <title>Voxidian Editor</title>
         <link rel="icon" type="image/png" href="/assets/image/logo_transparent.png">
         <link rel="stylesheet" type='text/css' href="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
@@ -242,11 +242,9 @@
             }
             .noicon {
                 opacity: 0;
-                width: max-content;
             }
             .icon {
                 opacity: 1;
-                width: max-content;
             }
         </style>
         <style> /* File tabs */
@@ -264,20 +262,27 @@
                 font-weight: 400;
                 font-style: normal;
                 cursor: grab; cursor: -webkit-grabbing; cursor: grabbing;
+                display: flex;
                 justify-content: center;
+                flex-direction: row;
             }
             #editor_filetabs #editor_filetab_selected {
-                color: #a6f500;
                 border-bottom: 1px solid #bfbfbf;
             }
+            #editor_filetabs #editor_filetab_selected > :not(.editor_filetab_icon) {
+                color: #a6f500;
+            }
+            #editor_filetabs > * * {
+                width: max-content;
+                height: 100%;
+            }
+            #editor_filetabs > * .editor_filetab_icon {
+                padding-top: 1px;
+            }
             #editor_filetabs > * .editor_filetab_name {
-                width: min-content;
-                height: min-content;
+                padding: 0 8px;
             }
             #editor_filetabs > * .editor_filetab_close {
-                margin-left: 8px;
-                width: min-content;
-                height: min-content;
                 opacity: 0;
                 transition: opacity 0.125s;
             }

@@ -79,9 +79,9 @@ pub fn open_nontext() { open("editor_right_main_nontext"); }
 
 pub fn open_load() { open("editor_right_main_loader"); }
 
-pub fn create_monaco(id : u32, initial_script : &str, open : bool) {
+pub fn create_monaco(id : u32, file_name : &str, initial_script : &str, open : bool) {
     if (open) { close(); }
-    monaco::create(id, initial_script.to_string(), "text".to_string(), open);
+    monaco::create(id, file_name, initial_script.to_string(), open);
 }
 pub fn open_monaco(id : u32) {
     close();

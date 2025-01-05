@@ -15,7 +15,7 @@ pub fn init_css() {
     let mut inner = String::new();
 
     for hue in 0..360 {
-        inner += &format!(".editor_code_remote_selection_{} {{ background: hsl({},100%,62.5%); opacity: 0.625; min-width: 2px; }}", hue, hue);
+        inner += &format!(".editor_code_remote_selection_{} {{ background: hsl({},100%,62.5%); opacity: 0.5; min-width: 2px; }}", hue, hue);
     }
 
     style.set_inner_html(&inner);
