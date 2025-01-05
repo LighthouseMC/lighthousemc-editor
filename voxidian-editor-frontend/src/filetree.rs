@@ -133,10 +133,20 @@ pub fn add(entry : &FileTreeEntry) {
     } else {
 
         let div = document.create_element("div").unwrap();
-        div.set_inner_html(&format!("<i></i> {}", filename));
-        let icon = div.query_selector("i").unwrap().unwrap();
-        set_filename_icon_classes(filename, &icon.class_list());
+        div.class_list().toggle_with_force("hbox", true).unwrap();
+        div.class_list().toggle_with_force("editor_filetree_file", true).unwrap();
+        div.set_attribute("editor_filetree_file_id", &entry.id.to_string()).unwrap();
         entry_root.append_child(&div).unwrap();
+
+        let icon = document.create_element("i").unwrap();
+        icon.class_list().toggle_with_force("editor_filetree_entry_icon", true).unwrap();
+        set_filename_icon_classes(filename, &icon.class_list());
+        div.append_child(&icon).unwrap();
+
+        let name = document.create_element("div").unwrap();
+        name.class_list().toggle_with_force("editor_filetree_entry_name", true).unwrap();
+        name.set_inner_html(filename);
+        div.append_child(&name).unwrap();
 
         let id = entry.id;
         let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });

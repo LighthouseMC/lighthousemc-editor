@@ -8,7 +8,7 @@
         <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&display=swap" rel="stylesheet">
         <style> /* Page & editor root */
-            html, body, #editor_left *, #editor_resize_hsplit, #editor_right, #editor_filetabs *, #editor_footer * {
+            html, body, #editor_resize_hsplit, #editor_right, #editor_filetabs *, #editor_footer * {
                 margin: 0;
                 padding: 0;
                 width: 100%;
@@ -198,6 +198,10 @@
             #editor_filetree::-webkit-scrollbar {
                 display: none;
             }
+            #editor_filetree #editor_filetree_root {
+                padding: 0;
+                margin: 0;
+            }
             #editor_filetree * {
                 overflow: visible;
                 user-select: none;
@@ -209,19 +213,32 @@
             #editor_filetree li {
                 height: max-content;
             }
-            #editor_filetree li div {
-                width: 100%;
+            #editor_filetree li > div {
                 padding-top: 2px;
                 padding-bottom: 2px;
                 background-color: rgb(255,255,255,0.0);
                 transition: background-color 0.125s;
                 cursor: pointer;
+                align-items: center;
             }
-            #editor_filetree li div:hover {
+            #editor_filetree li > div:hover {
                 background-color: rgb(255,255,255,0.125);
             }
-            #editor_filetree li div#editor_filetree_selected {
+            #editor_filetree li > div#editor_filetree_selected {
                 background-color: rgb(255,255,255,0.25);
+            }
+            #editor_filetree li > div > .editor_filetree_entry_icon {
+                padding-top: 2px;
+                width: min-content;
+            }
+            #editor_filetree li > div > .editor_filetree_entry_name {
+                padding-left: 4px;
+                flex-grow: 1;
+            }
+            #editor_filetree li > div > .editor_filetree_entry_remote {
+                height: 16px;
+                width: 2px;
+                margin-left: 2px;
             }
             #editor_filetree .editor_filetree_fold:before {
                 content: "❭";
@@ -238,7 +255,7 @@
             }
             #editor_filetree .editor_filetree_nest.editor_filetree_nest_unfolded {
                 display: block;
-                margin-left: 12px;
+                padding-left: 12px;
             }
             .noicon {
                 opacity: 0;
@@ -550,10 +567,8 @@
                     </div>
                 </div>
 
-                <div id="editor_filetree">
-                    <ul id="editor_filetree_root">
-                    </ul>
-                </div>
+                <div id="editor_filetree"><ul id="editor_filetree_root">
+                </ul></div>
 
             </div>
 
