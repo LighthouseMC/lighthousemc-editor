@@ -129,7 +129,7 @@ fn on_ws_message(e : MessageEvent) {
                     let _ = WS.close();
                 }
             });
-            web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(callback.as_ref().unchecked_ref(), 3750).unwrap();
+            web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(callback.as_ref().unchecked_ref(), 5000).unwrap();
             callback.forget();
         },
 

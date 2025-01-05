@@ -14,6 +14,8 @@ pub fn init() {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
+    monaco::init_theme();
+
     remote_cursors::init_css();
 
     let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
@@ -40,6 +42,8 @@ pub fn init() {
 
     let keydown_callback = Closure::<dyn FnMut(_) -> ()>::new(move |event : KeyboardEvent| {
         match ((event.ctrl_key(), event.alt_key(), event.key().as_str())) {
+
+            (true, false, "r") => { event.prevent_default(); },
 
             (true, false, "s") => { event.prevent_default(); },
 

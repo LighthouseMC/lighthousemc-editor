@@ -66,7 +66,7 @@ impl EditorInstanceManager {
                     for session_id in instance.sessions.keys().map(|k| *k).collect::<Vec<_>>() {
                         let session = &mut instance.sessions.get_mut(&session_id).unwrap();
                         if let MaybePendingEditorSessionState::Pending { session_code, .. } = &session.state {
-                            if (&given_session_code == session_code || true) { // TODO: Disable this `true`
+                            if (&given_session_code == session_code) {
                                 trace!("{} logged in to editor session for subserver {}.", session.client_name, instance.subserver);
                                 let handle = EditorSessionHandle::new(
                                     session.client_uuid, session.client_name.clone(),

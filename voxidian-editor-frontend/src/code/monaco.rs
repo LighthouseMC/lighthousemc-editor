@@ -46,6 +46,10 @@ mod js { use super::*;
         /// https://microsoft.github.io/monaco-editor/docs.html#functions/editor.create.html
         #[wasm_bindgen(js_namespace = ["monaco", "editor"], js_name = "create")]
         pub(super) fn editor_create(on: &Element, config : &JsValue) -> Editor;
+
+        /// https://microsoft.github.io/monaco-editor/docs.html#functions/editor.defineTheme.html
+        #[wasm_bindgen(js_namespace = ["monaco", "editor"], js_name = "defineTheme")]
+        pub(super) fn define_theme(name : &str, data : &JsValue) -> Editor;
     }
 
     #[wasm_bindgen]
@@ -114,6 +118,34 @@ struct MonacoConfig {
 #[derive(Ser, Deser)]
 struct MonacoConfigPaths {
     vs : String
+}
+
+#[derive(Ser, Deser)]
+struct EditorTheme {
+    base    : String,
+    inherit : bool,
+    #[serde(rename = "colors")]
+    colours : EditorThemeColours,
+    rules   : Vec<EditorThemeRule>
+}
+#[derive(Ser, Deser)]
+struct EditorThemeColours {
+    #[serde(rename = "editor.lineHighlightBorder")]
+    line_highlight_border           : String,
+    #[serde(rename = "editor.selectionBackground")]
+    selection_background            : String,
+    #[serde(rename = "editor.findMatchBackground")]
+    find_match_background           : String,
+    #[serde(rename = "editor.findMatchHighlightBackground")]
+    find_match_highlight_background : String,
+    #[serde(rename = "focusBorder")]
+    focus_border                    : String,
+    #[serde(rename = "contrastBorder")]
+    contrast_border                 : String
+}
+#[derive(Ser, Deser)]
+struct EditorThemeRule {
+    token : String
 }
 
 #[derive(Ser, Deser)]
@@ -208,6 +240,27 @@ pub struct ModelContentChangedEvent {
 }
 
 
+pub fn init_theme() {
+    require(move || {
+
+        js::define_theme("voxidian", &serde_wasm_bindgen::to_value(&EditorTheme {
+            base    : "hc-black".to_string(),
+            inherit : true,
+            colours : EditorThemeColours {
+                line_highlight_border           : "#007f00".to_string(),
+                selection_background            : "#007f00".to_string(),
+                find_match_background           : "#007f00".to_string(),
+                find_match_highlight_background : "#007f00".to_string(),
+                focus_border                    : "#00000000".to_string(),
+                contrast_border                 : "#3f3f3f".to_string(),
+            },
+            rules   : Vec::new()
+        }).unwrap());
+
+    });
+}
+
+
 pub fn create(file_id : u32, file_name : &str, initial_script : String, open : bool) { // TODO: Edit history undo/redo
     let initial_language = filename_to_language(file_name);
     require(move || {
@@ -230,7 +283,7 @@ pub fn create(file_id : u32, file_name : &str, initial_script : String, open : b
         let config = EditorConfig {
             value                     : initial_script.clone(),
             language                  : initial_language.to_string(),
-            theme                     : "hc-black".to_string(),
+            theme                     : "voxidian".to_string(),
             auto_detect_high_contrast : false,
             automatic_layout          : true,
             cursor_blinking           : "smooth".to_string(),
@@ -362,6 +415,8 @@ pub fn filename_to_language(filename : &str) -> &'static str {
             "sh" => "shell",
             // Rust
             "rs" => "rust",
+            // Toml
+            "toml" => "ini",
 
             _ => "plaintext"
         }

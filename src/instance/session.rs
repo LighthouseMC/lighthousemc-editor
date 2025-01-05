@@ -334,14 +334,14 @@ impl EditorSession {
             }
 
             // Send a keepalive message if it has been long enough.
-            if let Err(next_keepalive_idx) = self.last_keepalive.1 && (Instant::now() >= (self.last_keepalive.0 + Duration::from_millis(1500))) {
+            if let Err(next_keepalive_idx) = self.last_keepalive.1 && (Instant::now() >= (self.last_keepalive.0 + Duration::from_millis(2500))) {
                 self.last_keepalive.0 = Instant::now();
                 self.last_keepalive.1 = Ok(next_keepalive_idx);
                 self.send(KeepaliveS2CPacket).await?;
             }
 
             // Close the connection if timed out.
-            if let Ok(_) = self.last_keepalive.1 && (Instant::now() >= (self.last_keepalive.0 + Duration::from_millis(2500))) {
+            if let Ok(_) = self.last_keepalive.1 && (Instant::now() >= (self.last_keepalive.0 + Duration::from_millis(3750))) {
                 self.send(DisconnectS2CPacket { reason : "Timed out".to_string() }).await?;
                 self.stop()?;
             }
