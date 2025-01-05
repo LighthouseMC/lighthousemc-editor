@@ -416,7 +416,9 @@ pub fn filename_to_language(filename : &str) -> &'static str {
             // Rust
             "rs" => "rust",
             // Toml
-            "toml" => "ini",
+            "toml" => "r",
+            // Zig
+            "zig" => "rust",
 
             _ => "plaintext"
         }

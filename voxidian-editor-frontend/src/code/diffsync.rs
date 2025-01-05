@@ -161,6 +161,7 @@ fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, sta
         | (true, true, true, true, false, true, true, true, false, true, false)
         | (true, true, false, true, false, false, true, false, false, false, false)
         | (true, false, true, false, false, true, false, false, false, false, false)
+        | (false, true, false, false, false, false, true, false, true, false, false)
         => (start, end), // Change entirely after selection
 
         (false, false, true, false, false, false, false, false, false, false, false)
