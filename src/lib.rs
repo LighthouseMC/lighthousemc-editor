@@ -67,13 +67,18 @@ impl EditorServer {
         });
         let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, handle_outgoing_tx, add_ws_rx);
 
-        let mut a = pin!(server.listen(bind_addr));
-        let mut b = pin!(instance_manager.run(db));
+        let mut a      = pin!(server.listen(bind_addr));
+        let mut b      = pin!(instance_manager.run(db));
+        let mut b_done = false;
         loop {
             let ap = poll!(&mut a);
             if (ap.is_ready()) { return a.await; }
-            let bp = poll!(&mut b);
-            if (bp.is_ready()) { unreachable!(); }
+            if (! b_done) {
+                let bp = poll!(&mut b);
+                if (bp.is_ready()) {
+                    b_done = true;
+                }
+            }
             yield_now().await;
         }
     }
