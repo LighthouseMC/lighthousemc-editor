@@ -37,7 +37,7 @@ pub struct EditorServer(());
 impl EditorServer {
 
 
-    pub async fn run<S : Into<SocketAddr>, F : Fn(EditorHandle) -> ()>(bind_addr : S, db : Arc<VoxidianDB>, f : F) -> Result<(), io::Error> {
+    pub async fn run<A : ToSocketAddrs, F : Fn(EditorHandle) -> ()>(bind_addr : A, db : Arc<VoxidianDB>, f : F) -> Result<(), io::Error> {
         let bind_addr = bind_addr.into();
         let mut server = tide::new();
 
@@ -45,7 +45,7 @@ impl EditorServer {
 
         server.at("/assets/image/logo_transparent.png").get(|req| Self::handle_asset(req, mime::PNG, include_bytes!("assets/image/logo_transparent.png")));
 
-        server.at("/").get(Self::handle_root);
+        //server.at("/").get(Self::handle_root);
 
         server.at("/editor").get(Self::handle_editor);
         server.at("/editor/voxidian_editor_frontend.js").get(|req| Self::handle_asset(req, mime::JAVASCRIPT, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js")));

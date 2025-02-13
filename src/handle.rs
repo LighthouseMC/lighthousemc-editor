@@ -55,10 +55,10 @@ impl EditorHandle {
 impl Drop for EditorHandle {
     fn drop(&mut self) {
         let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::Stop);
-        loop {
+        block_on(async{ loop {
             if let Ok(EditorHandleOutgoingEvent::Stop) = self.handle_outgoing_rx.try_recv() { break; }
-            block_on(yield_now());
-        }
+            yield_now().await;
+        } });
     }
 }
 
