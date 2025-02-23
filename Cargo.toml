@@ -27,15 +27,15 @@ path = "../voxidian-logger"
 [dependencies.voxidian-database]
 path = "../voxidian-database"
 
-[dependencies.tide]
-version = "0.16"
-[dependencies.tide-websockets]
-version = "0.4"
+[dependencies.axecs]
+path = "../../ecs/axecs"
 
-[dependencies.async-std]
-version = "1.13"
-[dependencies.futures]
-version = "0.3"
+[dependencies.axum]
+version  = "0.8.1"
+features = [ "ws" ]
+[dependencies.tokio]
+version  = "1.43"
+features = [ "full" ]
 
 [dependencies.const_format]
 version = "0.2"
@@ -46,7 +46,3 @@ version = "0.10"
 [dependencies.uuid]
 version  = "1.11"
 features = [ "v4" ]
-
-
-[build-dependencies.walkdir]
-version = "2.5"

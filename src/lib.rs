@@ -1,150 +1,133 @@
 #![feature(
-    let_chains,
-    future_join,
-    async_iterator,
-    mpmc_channel
+    decl_macro
 )]
 
 
-mod ws;
-use ws::WebSocketContainer;
-mod handle;
-pub use handle::EditorHandle;
-mod instance;
-use instance::EditorInstanceManager;
-
-
-use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketDecode };
-use voxidian_editor_common::packet::s2c::DisconnectS2CPacket;
-use voxidian_editor_common::packet::c2s::HandshakeC2SPacket;
-use voxidian_database::VoxidianDB;
-use std::net::{ SocketAddr, TcpListener };
+use voxidian_editor_common::packet;
 use std::io;
-use std::sync::{ mpmc, Arc };
 use std::time::Duration;
-use std::pin::pin;
-use std::task::Poll;
-use async_std::stream::StreamExt;
-use async_std::future::timeout;
-use async_std::task::yield_now;
-use futures::poll;
-use tide::{ self, Request, Response };
-use tide::http::mime::{ self, Mime };
-use tide_websockets::{ WebSocket, WebSocketConnection, Message };
+use std::sync::Arc;
+use tokio::net::{ TcpListener, ToSocketAddrs };
+use tokio::time::timeout;
+use axum::{ self, Router };
+use axum::http::StatusCode;
+use axum::http::{ HeaderValue, header::CONTENT_TYPE };
+use axum::routing;
+use axum::response::{ IntoResponse, Html };
+use axum::extract::State;
+mod mime {
+    pub const TEXT : &'static str = "text/plain";
+    pub const PNG  : &'static str = "image/png";
+    pub const JS   : &'static str = "application/javascript";
+    pub const WASM : &'static str = "application/wasm";
+}
+use axum::extract::ws;
+
 use const_format::str_replace;
+macro str_replace_multiple {
+
+    ( $original:expr $( , [ $(,)? ] )? $(,)? ) => { $original },
+
+    ( $original:expr , [ ( $aa:expr , $ab:expr $(,)? ) $( , ( $ba:expr , $bb:expr $(,)? ) )* $(,)? ] $(,)? ) => {
+        str_replace_multiple!( str_replace!( $original , $aa , $ab ) , [ $( ( $ba , $bb , ) , )* ] , )
+    }
+
+}
 
 
-pub struct EditorServer(());
+mod instance;
+pub use instance::*;
+
+
+pub struct EditorServer {
+    pub display_game_address : String,
+    pub instances            : Arc<EditorInstances>
+}
 impl EditorServer {
 
 
-    pub async fn run<F : AsyncFnOnce(EditorHandle) -> ()>(bind_addrs : &[SocketAddr], db : Arc<VoxidianDB>, display_connect_address : String, f : F) -> Result<(), io::Error> {
-        let mut server = tide::new();
+    pub async fn run<A : ToSocketAddrs>(self, bind_addrs : A) -> Result<(), io::Error> {
+        let app = Router::new();
 
-        server.at("/robots.txt").get(Self::handle_robotstxt);
+        // Static assets
+        let app = app.route("/robots.txt",                              routing::get(async || Self::route_asset(mime::TEXT, include_str!   ("assets/misc/robots.txt"                                           ).into_response())));
+        let app = app.route("/assets/image/logo_transparent.png",       routing::get(async || Self::route_asset(mime::PNG,  include_bytes! ("assets/image/logo_transparent.png"                                ).into_response())));
+        let app = app.route("/editor/voxidian_editor_frontend.js",      routing::get(async || Self::route_asset(mime::JS,   include_str!   ("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js"      ).into_response())));
+        let app = app.route("/editor/voxidian_editor_frontend_bg.wasm", routing::get(async || Self::route_asset(mime::WASM, include_bytes! ("../voxidian-editor-frontend/pkg/voxidian_editor_frontend_bg.wasm" ).into_response())));
 
-        server.at("/assets/image/logo_transparent.png").get(|req| Self::handle_asset(req, mime::PNG, include_bytes!("assets/image/logo_transparent.png")));
+        // Root
+        let app = app.route("/", routing::get(Html(include_str!("assets/template/root.html").replace("{{DISPLAY_GAME_ADDRESS}}", &self.display_game_address))));
 
-        server.at("/").get(move |req| Self::handle_root(req, display_connect_address.clone()));
+        // Editor
+        const EDITOR : &'static str = str_replace_multiple!( include_str!("assets/template/editor.html"), [
+            ("{{VOXIDIAN_EDITOR_VERSION}}",      env!("CARGO_PKG_VERSION"           )),
+            ("{{VOXIDIAN_EDITOR_COMMIT}}",       env!("VOXIDIAN_EDITOR_COMMIT"      )),
+            ("{{VOXIDIAN_EDITOR_COMMIT_HASH}}",  env!("VOXIDIAN_EDITOR_COMMIT_HASH" ))
+        ] );
+        let app = app.route("/editor", routing::get(Html(EDITOR)));
 
-        server.at("/editor").get(Self::handle_editor);
-        server.at("/editor/voxidian_editor_frontend.js").get(|req| Self::handle_asset(req, mime::JAVASCRIPT, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js")));
-        server.at("/editor/voxidian_editor_frontend_bg.wasm").get(|req| Self::handle_asset(req, mime::WASM, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend_bg.wasm")));
+        // Editor Websocket
+        let app = app.route("/editor/ws", routing::any(Self::handle_editor_ws));
 
-        let (add_ws_tx, add_ws_rx) = mpmc::channel();
-        server.at("/editor/ws").get(
-            WebSocket::new(move |req, stream| Self::handle_editor_ws(stream, add_ws_tx.clone()))
-                .with_protocols(&["voxidian-editor"])
-        );
+        // Fallback
+        let app = app.fallback((StatusCode::NOT_FOUND, Html(include_str!("assets/template/404.html"))));
 
-        server.at("*").get(Self::handle_404);
+        // State
+        let app = app.with_state(self.instances);
 
-        let (handle_incoming_tx, handle_incoming_rx) = mpmc::channel();
-        let (handle_outgoing_tx, handle_outgoing_rx) = mpmc::channel();
-        f(EditorHandle {
-            handle_incoming_tx,
-            handle_outgoing_rx
-        }).await;
-        let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, handle_outgoing_tx, add_ws_rx);
-
-        let mut a = pin!(server.listen(TcpListener::bind(bind_addrs)?));
-        let mut b = pin!(instance_manager.run(db));
-        loop {
-            if let Poll::Ready(out) = poll!(&mut a) {
-                if let Err(out) = out { return Err(out); }
-                else { panic!("Editor server terminated.") }
-            }
-            if let Poll::Ready(_) = poll!(&mut b) {
-                return Ok(());
-            }
-            yield_now().await;
-        }
+        // Run
+        let listener = TcpListener::bind(bind_addrs).await?;
+        axum::serve(listener, app.into_make_service()).await
     }
 
 
-    async fn handle_robotstxt(_ : Request<()>) -> tide::Result {
-        Ok(Response::builder(200).content_type(mime::PLAIN).body(include_str!("assets/template/robots.txt")).build())
-    }
-
-    async fn handle_asset(_ : Request<()>, mime : Mime, data : &[u8]) -> tide::Result {
-        Ok(Response::builder(200).content_type(mime).body(data).build())
-    }
-
-
-    async fn handle_root(_ : Request<()>, display_connect_address : String) -> tide::Result {
-        Ok(Response::builder(200).content_type(mime::HTML).body(
-            include_str!("assets/template/root.html")
-                .replace("{{CONNECT_ADDRESS}}", &display_connect_address)
-        ).build())
+    fn route_asset(content_type : &'static str, data : impl IntoResponse) -> impl IntoResponse {
+        let mut response = data.into_response();
+        response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
+        response
     }
 
 
-    async fn handle_editor(_ : Request<()>) -> tide::Result {
-        const EDITOR0 : &'static str = include_str!("assets/template/editor.html");
-        const EDITOR1 : &'static str = str_replace!(EDITOR0, "{{VOXIDIAN_EDITOR_VERSION}}", env!("CARGO_PKG_VERSION"));
-        const EDITOR2 : &'static str = str_replace!(EDITOR1, "{{VOXIDIAN_EDITOR_COMMIT}}", env!("VOXIDIAN_EDITOR_COMMIT"));
-        const EDITOR  : &'static str = str_replace!(EDITOR2, "{{VOXIDIAN_EDITOR_COMMIT_HASH}}", env!("VOXIDIAN_EDITOR_COMMIT_HASH"));
-        Ok(Response::builder(200).content_type(mime::HTML).body(EDITOR).build())
+    async fn handle_editor_ws(
+        upgrade   : ws::WebSocketUpgrade,
+        instances : State<Arc<EditorInstances>>
+    ) -> impl IntoResponse {
+        upgrade.protocols(["voxidian-editor"])
+            .on_upgrade(move |socket| Self::handle_editor_socket(socket, instances.0))
     }
+    async fn handle_editor_socket(
+        mut socket    : ws::WebSocket,
+            instances : Arc<EditorInstances>
+    ) {
 
-
-    async fn handle_editor_ws(mut ws : WebSocketConnection, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
-        /*if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
-            return Err(tide::Error::from_str(403, "403 Access Forbidden"));
-        }*/ // TODO: Fix this
-        let session_code = match (match (timeout(Duration::from_secs(1), ws.next()).await) {
-            Err(_) => Err(("Login took too long".to_string(), 408, "408 Request Timeout")),
-            Ok(None) => Err(("No data".to_string(), 400, "400 Bad Request")),
-            Ok(Some(Err(err))) => Err((format!("An error occured: {}", err), 400, "400 Bad Request")),
-            Ok(Some(Ok(Message::Binary(data)))) => {
-                let mut buf = PacketBuf::from(data);
-                match (HandshakeC2SPacket::decode_prefixed(&mut buf)) {
-                    Err(err) => Err((format!("An error occured: {:?}", err), 400, "400 Bad Request")),
-                    Ok(handshake) => Ok(handshake.session_code)
+        let session_code = match (timeout(Duration::from_millis(2500), socket.recv()).await) {
+            Err(_) => Err("Login took too long".into()),
+            Ok(None) => Err("No session code".into()),
+            Ok(Some(Err(err))) => Err(format!("An error occursed: {}", err).into()),
+            Ok(Some(Ok(ws::Message::Binary(data)))) => {
+                match (packet::decode::<packet::c2s::HandshakeC2SPacket>(data.as_ref())) {
+                    Ok(handshake) => Ok(handshake.session_code),
+                    Err(err) => Err(format!("An error occursed: {:?}", err).into())
                 }
             },
-            Ok(Some(Ok(_))) => Err(("Bad data format".to_string(), 400, "400 Bad Request"))
-        }) {
-            Err((reason, code, error)) => {
-                let _ = ws.send_bytes(PacketBuf::of_encode_prefixed(DisconnectS2CPacket { reason }).into_inner()).await;
-                return Err(tide::Error::from_str(code, error));
-            },
-            Ok(session_code) => session_code
+            Ok(Some(Ok(_))) => Err("Bad data format".into())
+        };
+        let session_code = match (session_code) {
+            Ok(session_code) => session_code,
+            Err(reason) => {
+                let _ = socket.send(ws::Message::Binary(packet::encode(packet::s2c::DisconnectS2CPacket { reason }).into())).await;
+                return;
+            }
         };
 
-        let ws = WebSocketContainer::new(ws);
+        let Some(mut session) = instances.get_pending_session(&session_code).await else {
+            let _ = socket.send(ws::Message::Binary(packet::encode(packet::s2c::DisconnectS2CPacket {
+                reason : "Invalid session code. Has it expired?".into()
+            }).into())).await;
+            return;
+        };
 
-        let _ = add_ws_tx.send((ws.clone(), session_code));
-
-        while (! ws.is_closed()) {
-            yield_now().await;
-        }
-        Ok(())
-    }
-
-
-    async fn handle_404(_ : Request<()>) -> tide::Result {
-        Ok(Response::builder(404).content_type(mime::HTML).body(include_str!("assets/template/404.html")).build())
+        session.activate(socket);
     }
 
 

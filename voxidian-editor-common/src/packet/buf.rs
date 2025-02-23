@@ -4,22 +4,23 @@ use crate::packet::{
     PacketDecode,
     DecodeError
 };
-use std::{ fmt, iter, slice, vec };
+use std::{ fmt, iter, slice };
+use std::borrow::Cow;
 
 
 #[derive(Clone, Hash, Eq, PartialEq)]
-pub struct PacketBuf {
-    inner    : Vec<u8>,
+pub struct PacketBuf<'l> {
+    inner    : Cow<'l, [u8]>,
     read_idx : usize
 }
 
 
 /// Constructors
-impl PacketBuf {
+impl<'l> PacketBuf<'l> {
 
     pub fn new() -> Self {
         PacketBuf {
-            inner    : Vec::new(),
+            inner    : Cow::Borrowed(&[]),
             read_idx : 0,
         }
     }
@@ -37,30 +38,36 @@ impl PacketBuf {
     }
 
 }
-impl From<Vec<u8>> for PacketBuf {
+impl<'l> From<&'l [u8]> for PacketBuf<'l> {
+    fn from(value : &'l [u8]) -> Self { Self {
+        inner    : Cow::Borrowed(value),
+        read_idx : 0
+    } }
+}
+impl<'l> From<Vec<u8>> for PacketBuf<'l> {
     fn from(value : Vec<u8>) -> Self { Self {
-        inner    : value,
+        inner    : Cow::Owned(value),
         read_idx : 0
     } }
 }
 
 
 /// Deconstructors
-impl PacketBuf {
+impl<'l> PacketBuf<'l> {
 
-    pub fn into_inner(self) -> Vec<u8> {
-        self.inner.into_iter().skip(self.read_idx).collect::<Vec<_>>()
+    pub fn to_vec(self) -> Vec<u8> {
+        self.inner.into_owned()
     }
 
     pub fn as_slice(&self) -> &[u8] {
-        &self.inner.as_slice().get(self.read_idx..).unwrap_or(&[])
+        (&*self.inner).get(self.read_idx..).unwrap_or(&[])
     }
 
 }
 
 
 /// Basic Operations
-impl PacketBuf {
+impl<'l> PacketBuf<'l> {
 
     #[track_caller]
     pub fn seek(&mut self, idx : usize) {
@@ -78,11 +85,25 @@ impl PacketBuf {
     }
 
     pub fn write_u8(&mut self, byte : u8) -> () {
-        self.inner.push(byte);
+        match (&mut self.inner) {
+            Cow::Owned(inner) => inner.push(byte),
+            Cow::Borrowed(inner) => {
+                let mut inner = inner.to_vec();
+                inner.push(byte);
+                self.inner = Cow::Owned(inner);
+            }
+        }
     }
 
     pub fn write_u8s(&mut self, data : &[u8]) -> () {
-        self.inner.extend_from_slice(data);
+        match (&mut self.inner) {
+            Cow::Owned(inner) => inner.extend_from_slice(data),
+            Cow::Borrowed(inner) => {
+                let mut inner = inner.to_vec();
+                inner.extend_from_slice(data);
+                self.inner = Cow::Owned(inner);
+            }
+        }
     }
 
     pub fn read_u8(&mut self) -> Result<u8, DecodeError> {
@@ -114,28 +135,21 @@ impl PacketBuf {
 }
 
 
-impl<'l> IntoIterator for &'l PacketBuf {
-    type Item     = &'l u8;
-    type IntoIter = iter::Skip<slice::Iter<'l, u8>>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.inner.iter().skip(self.read_idx)
-    }
-}
-impl IntoIterator for PacketBuf {
+impl<'l, 'k : 'l> IntoIterator for &'k PacketBuf<'l> {
     type Item     = u8;
-    type IntoIter = iter::Skip<vec::IntoIter<u8>>;
+    type IntoIter = iter::Cloned<iter::Skip<slice::Iter<'l, u8>>>;
     fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter().skip(self.read_idx)
+        self.inner.iter().skip(self.read_idx).cloned()
     }
 }
 /// Iterator
-impl PacketBuf {
-    pub fn iter(&self) -> impl Iterator<Item = u8> { (&self).into_iter().map(|byte| *byte) }
+impl<'l> PacketBuf<'l> {
+    pub fn iter(&self) -> impl Iterator<Item = u8> { (&self).into_iter() }
 }
 
 
 /// Encode & Decode
-impl PacketBuf {
+impl<'l> PacketBuf<'l> {
 
     pub fn encode_write<T : PacketEncode>(&mut self, encodable : T) -> () {
         encodable.encode(self);
@@ -148,7 +162,7 @@ impl PacketBuf {
 }
 
 
-impl fmt::Debug for PacketBuf {
+impl<'l> fmt::Debug for PacketBuf<'l> {
     fn fmt(&self, f : &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "PacketBuf(0x")?;
         for byte in self.inner.iter().skip(self.read_idx) {

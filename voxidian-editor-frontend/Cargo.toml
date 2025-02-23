@@ -56,6 +56,9 @@ features = [
 [dependencies.js-sys]
 version = "0.3"
 
+[dependencies.wasm-cookies]
+version = "0.2"
+
 [dependencies.lazy_static]
 version = "1.5"
 

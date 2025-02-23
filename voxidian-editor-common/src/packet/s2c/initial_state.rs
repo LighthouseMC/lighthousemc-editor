@@ -2,22 +2,22 @@ use super::*;
 
 
 #[derive(Debug)]
-pub struct InitialStateS2CPacket {
+pub struct InitialStateS2CPacket<'l> {
     pub plot_id         : u64,
-    pub plot_owner_name : String,
-    pub tree_entries    : Vec<FileTreeEntry>
+    pub plot_owner_name : Cow<'l, str>,
+    pub tree_entries    : Cow<'l, [FileTreeEntry]>
 }
 
-impl PacketMeta for InitialStateS2CPacket {
+impl<'l> PacketMeta for InitialStateS2CPacket<'l> {
     const PREFIX : u8 = 3;
 }
 
-impl PacketEncode for InitialStateS2CPacket {
+impl<'l> PacketEncode for InitialStateS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
         buf.encode_write(&self.plot_id);
         buf.encode_write(&self.plot_owner_name);
         buf.encode_write(&(self.tree_entries.len() as u32));
-        for file in &self.tree_entries {
+        for file in &*self.tree_entries {
             buf.encode_write(file.id);
             buf.encode_write(file.is_dir);
             buf.encode_write(&file.parent_dir);
@@ -26,11 +26,11 @@ impl PacketEncode for InitialStateS2CPacket {
     }
 }
 
-impl PacketDecode for InitialStateS2CPacket {
+impl<'l> PacketDecode for InitialStateS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
             plot_id         : buf.read_decode::<u64>()?,
-            plot_owner_name : buf.read_decode::<String>()?,
+            plot_owner_name : buf.read_decode::<Cow<'l, str>>()?,
             tree_entries    : {
                 let     count = buf.read_decode::<u32>()? as usize;
                 let mut files = Vec::with_capacity(count);
@@ -42,7 +42,7 @@ impl PacketDecode for InitialStateS2CPacket {
                         fsname     : buf.read_decode::<String>()?
                     })
                 }
-                files
+                Cow::Owned(files)
             }
         })
     }

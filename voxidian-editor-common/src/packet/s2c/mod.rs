@@ -15,14 +15,15 @@ pub use selections::*;
 
 
 use super::*;
+use std::borrow::Cow;
 
 
-packet_group!{ pub enum S2CPackets {
-    Disconnect(DisconnectS2CPacket),
+packet_group!{ pub enum S2CPackets<'l> {
+    Disconnect(DisconnectS2CPacket<'l>),
     Keepalive(KeepaliveS2CPacket),
     LoginSuccess(LoginSuccessS2CPacket),
-    InitialState(InitialStateS2CPacket),
-    OvewriteFile(OverwriteFileS2CPacket),
+    InitialState(InitialStateS2CPacket<'l>),
+    OvewriteFile(OverwriteFileS2CPacket<'l>),
     PatchFile(PatchFileS2CPacket),
-    Selections(SelectionsS2CPacket)
+    Selections(SelectionsS2CPacket<'l>)
 } }

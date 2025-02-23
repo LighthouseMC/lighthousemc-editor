@@ -1,5 +1,6 @@
 use crate::packet::{ PacketBuf, PacketMeta };
 use std::mem::MaybeUninit;
+use std::borrow::Cow;
 use uuid::Uuid;
 
 
@@ -15,7 +16,7 @@ pub enum DecodeError {
     EndOfBuffer,
 
     /// The data in the buffer could not be parsed properly.
-    /// 
+    ///
     /// Includes a message.
     InvalidData(String),
 
@@ -23,7 +24,7 @@ pub enum DecodeError {
     UnconsumedBuffer,
 
     /// The received packet ID did not match any registered packet.
-    /// 
+    ///
     /// Includes the ID that wasn't recognised.
     UnknownPacketPrefix(u8)
 
@@ -47,9 +48,13 @@ impl PacketDecode for Uuid { fn decode(buf : &mut PacketBuf) -> Result<Self, Dec
     Ok(Self::from_u64_pair(msb, lsb))
 } }
 
-impl PacketDecode for String { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
+impl<'l> PacketDecode for String { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
     let len = buf.read_decode::<u32>()? as usize;
     Ok(String::from_utf8(buf.read_u8s(len)?).map_err(|_| DecodeError::InvalidData("String data is not valid UTF8".to_string()))?)
+} }
+
+impl<'l> PacketDecode for Cow<'l, str> { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
+    Ok(Cow::Owned(buf.read_decode()?))
 } }
 
 impl<T : PacketDecode> PacketDecode for Option<T> { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {

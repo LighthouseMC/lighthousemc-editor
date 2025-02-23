@@ -45,8 +45,6 @@ extern "C" {
 
 #[wasm_bindgen]
 extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn error(msg : &str);
 
     type Error;
 
@@ -58,11 +56,17 @@ extern "C" {
 }
 
 
-// TODO: Remove
 #[wasm_bindgen]
 extern "C" {
+
+    #[wasm_bindgen(js_namespace = console)]
+    fn error(msg : &str);
+    #[wasm_bindgen(js_namespace = console, js_name = error)]
+    fn errorjs2(a : JsValue, b : JsValue);
+
     #[wasm_bindgen(js_namespace = console)]
     fn warn(msg : &str);
     #[wasm_bindgen(js_namespace = console, js_name = warn)]
     fn warnjs(msg : JsValue);
+
 }

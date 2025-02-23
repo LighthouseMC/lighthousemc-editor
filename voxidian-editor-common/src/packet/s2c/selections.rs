@@ -3,18 +3,18 @@ use super::c2s::SelectionRange;
 
 
 #[derive(Debug)]
-pub struct SelectionsS2CPacket {
+pub struct SelectionsS2CPacket<'l> {
     pub client_id   : u64,
-    pub client_name : String,
+    pub client_name : Cow<'l, str>,
     pub colour      : u16,
     pub selections  : Option<(u64, Vec<SelectionRange>)>
 }
 
-impl PacketMeta for SelectionsS2CPacket {
+impl<'l> PacketMeta for SelectionsS2CPacket<'l> {
     const PREFIX : u8 = 6;
 }
 
-impl PacketEncode for SelectionsS2CPacket {
+impl<'l> PacketEncode for SelectionsS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
         buf.encode_write(self.client_id);
         buf.encode_write(&self.client_name);
@@ -33,10 +33,10 @@ impl PacketEncode for SelectionsS2CPacket {
     }
 }
 
-impl PacketDecode for SelectionsS2CPacket {
+impl<'l> PacketDecode for SelectionsS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
-            client_id : buf.read_decode()?,
+            client_id   : buf.read_decode()?,
             client_name : buf.read_decode()?,
             colour      : buf.read_decode()?,
             selections  : if (buf.read_decode::<bool>()?){

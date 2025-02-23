@@ -2,16 +2,16 @@ use super::*;
 
 
 #[derive(Debug)]
-pub struct OverwriteFileS2CPacket {
+pub struct OverwriteFileS2CPacket<'l> {
     pub id       : u64,
-    pub contents : FileContents
+    pub contents : FileContents<'l>
 }
 
-impl PacketMeta for OverwriteFileS2CPacket {
+impl<'l> PacketMeta for OverwriteFileS2CPacket<'l> {
     const PREFIX : u8 = 4;
 }
 
-impl PacketEncode for OverwriteFileS2CPacket {
+impl<'l> PacketEncode for OverwriteFileS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
         buf.encode_write(self.id);
         match (&self.contents) {
@@ -24,7 +24,7 @@ impl PacketEncode for OverwriteFileS2CPacket {
     }
 }
 
-impl PacketDecode for OverwriteFileS2CPacket {
+impl<'l> PacketDecode for OverwriteFileS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
             id       : buf.read_decode()?,
@@ -39,7 +39,7 @@ impl PacketDecode for OverwriteFileS2CPacket {
 
 
 #[derive(Debug)]
-pub enum FileContents {
+pub enum FileContents<'l> {
     NonText,
-    Text(String)
+    Text(Cow<'l, str>)
 }

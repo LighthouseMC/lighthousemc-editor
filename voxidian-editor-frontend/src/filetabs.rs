@@ -1,4 +1,4 @@
-use crate::state::FilesEntry;
+use crate::state::{ FilesEntry, FilesEntryContents };
 use voxidian_editor_common::packet::s2c::FileContents;
 use wasm_bindgen::prelude::*;
 
@@ -94,8 +94,8 @@ pub fn close(id : u64) {
             crate::filetree::open_file(id);
             if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read().get(&id) {
                 match (is_open) {
-                    Some(Some(FileContents::Text(_))) => { crate::code::open_monaco(id); },
-                    Some(Some(FileContents::NonText)) => { crate::code::open_nontext(); },
+                    Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(id); },
+                    Some(Some(FilesEntryContents::NonText)) => { crate::code::open_nontext(); },
                     Some(None) => { crate::code::open_load(); },
                     None => { crate::code::open_noopen(); }
                 }

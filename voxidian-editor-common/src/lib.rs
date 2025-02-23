@@ -1,6 +1,7 @@
 #![feature(
     decl_macro,
-    iter_array_chunks
+    iter_array_chunks,
+    str_as_str
 )]
 
 

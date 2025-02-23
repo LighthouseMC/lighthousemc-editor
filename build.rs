@@ -2,7 +2,6 @@
 
 
 use std::process::Command;
-use walkdir::WalkDir;
 
 
 fn main() {
@@ -13,15 +12,7 @@ fn main() {
     println!("cargo:rustc-env=VOXIDIAN_EDITOR_COMMIT_HASH={}", voxidian_editor_commit);
 
     Command::new("wasm-pack").args(["build", "--target", "web"]).current_dir("voxidian-editor-frontend").status().unwrap().exit_ok().unwrap();
-    for entry in WalkDir::new("voxidian-editor-frontend") {
-        if let Ok(entry) = entry {
-            println!("cargo::rerun-if-changed={}", entry.path().display());
-        }
-    }
-    for entry in WalkDir::new("voxidian-editor-common") {
-        if let Ok(entry) = entry {
-            println!("cargo::rerun-if-changed={}", entry.path().display());
-        }
-    }
+    println!("cargo::rerun-if-changed=voxidian-editor-common");
+    println!("cargo::rerun-if-changed=voxidian-editor-frontend");
 
 }

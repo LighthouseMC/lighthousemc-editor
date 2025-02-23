@@ -1,4 +1,5 @@
 use crate::packet::{ PacketBuf, PacketMeta };
+use std::borrow::Cow;
 use uuid::Uuid;
 
 
@@ -32,7 +33,13 @@ impl PacketEncode for &str { fn encode(&self, buf : &mut PacketBuf) -> () {
     buf.write_u8s(self.as_bytes());
 } }
 
-impl PacketEncode for String { fn encode(&self, buf : &mut PacketBuf) -> () { self.as_str().encode(buf) } }
+impl PacketEncode for String { fn encode(&self, buf : &mut PacketBuf) -> () {
+    buf.encode_write(self.as_str())
+} }
+
+impl PacketEncode for Cow<'_, str> { fn encode(&self, buf : &mut PacketBuf) -> () {
+    buf.encode_write(self.as_str())
+} }
 
 impl<T : PacketEncode> PacketEncode for Option<T> { fn encode(&self, buf : &mut PacketBuf) -> () {
     if let Some(value) = self {

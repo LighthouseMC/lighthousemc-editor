@@ -1,9 +1,9 @@
 //! https://neil.fraser.name/writing/sync/
 
 
+use crate::state::FilesEntryContents;
 use crate::code::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
 use crate::code::remote_cursors;
-use voxidian_editor_common::packet::s2c::FileContents;
 use voxidian_editor_common::packet::c2s::PatchFileC2SPacket;
 use voxidian_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };
 
@@ -18,13 +18,13 @@ pub fn send_patches_to_server() {
         let id = container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap();
 
         let mut files = crate::state::FILES.write();
-        let Some(Some(FileContents::Text(client_shadow))) = &mut files.get_mut(&id).unwrap().is_open else { continue };
+        let Some(Some(FilesEntryContents::Text(client_shadow))) = &mut files.get_mut(&id).unwrap().is_open else { continue };
         let client_text = monaco::EDITORS.read()[&id].get_model().get_value(1);
 
         if (client_shadow != &client_text) {
             let dmp = DiffMatchPatch::new();
             // Client Text is diffed against the Client Shadow.
-            let diffs = dmp.diff_main::<Efficient>(client_shadow, &client_text).unwrap();
+            let diffs = dmp.diff_main::<Efficient>(&client_shadow, &client_text).unwrap();
             // This returns a list of edits which have been performed on Client Text.
             let patches = dmp.patch_make(PatchInput::new_diffs(&diffs)).unwrap();
             // Client Text is copied over to Client Shadow.

@@ -2,21 +2,21 @@ use super::*;
 
 
 #[derive(Debug)]
-pub struct HandshakeC2SPacket {
-    pub session_code : String
+pub struct HandshakeC2SPacket<'l> {
+    pub session_code : Cow<'l, str>
 }
 
-impl PacketMeta for HandshakeC2SPacket {
+impl<'l> PacketMeta for HandshakeC2SPacket<'l> {
     const PREFIX : u8 = 0;
 }
 
-impl PacketEncode for HandshakeC2SPacket {
+impl<'l> PacketEncode for HandshakeC2SPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
         buf.encode_write(&self.session_code);
     }
 }
 
-impl PacketDecode for HandshakeC2SPacket {
+impl<'l> PacketDecode for HandshakeC2SPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
             session_code : buf.read_decode()?

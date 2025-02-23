@@ -1,4 +1,4 @@
-use voxidian_editor_common::packet::s2c::{ FileTreeEntry, FileContents };
+use voxidian_editor_common::packet::s2c::FileTreeEntry;
 use voxidian_editor_common::packet::c2s::*;
 use std::cell::LazyCell;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
@@ -30,10 +30,15 @@ static FILE_HISTORY : Mutex<VecDeque<(u64, String)>> = Mutex::new(VecDeque::new(
 pub struct FilesEntry {
     pub id      : u64,
     pub fsname  : String,
-    pub is_open : Option<Option<FileContents>>
+    pub is_open : Option<Option<FilesEntryContents>>
     //            |      |      ^- File data
     //            |      ^- None if opened but no data from server yet
     //            ^- None if file not opened
+}
+#[derive(Debug)]
+pub enum FilesEntryContents {
+    NonText,
+    Text(String)
 }
 
 
@@ -57,8 +62,8 @@ pub fn open_file(id : u64, path : String, remove_history : bool) -> bool {
     crate::code::remote_cursors::update();
     let mut should_proper_update_cursor = true;
     match (is_open) {
-        Some(Some(FileContents::NonText)) => { crate::code::open_nontext(); },
-        Some(Some(FileContents::Text(_))) => { crate::code::open_monaco(id); },
+        Some(Some(FilesEntryContents::NonText)) => { crate::code::open_nontext(); },
+        Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(id); },
         Some(None) => { crate::code::open_load(); },
         None => {
             *is_open = Some(None);

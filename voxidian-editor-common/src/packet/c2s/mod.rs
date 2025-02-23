@@ -13,10 +13,11 @@ pub use selections::*;
 
 
 use super::*;
+use std::borrow::Cow;
 
 
-packet_group!{ pub enum C2SPackets {
-    Handshake(HandshakeC2SPacket),
+packet_group!{ pub enum C2SPackets<'l> {
+    Handshake(HandshakeC2SPacket<'l>),
     Keepalive(KeepaliveC2SPacket),
     OpenFile(OpenFileC2SPacket),
     CloseFile(CloseFileC2SPacket),

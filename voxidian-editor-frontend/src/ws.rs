@@ -1,4 +1,4 @@
-use crate::state::FilesEntry;
+use crate::state::{ FilesEntry, FilesEntryContents };
 use crate::code::remote_cursors::RemoteSelection;
 use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::{ S2CPackets, FileContents };
@@ -8,9 +8,12 @@ use std::cell::SyncUnsafeCell;
 use std::ops::Deref;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{ AtomicU64, Ordering };
+use std::borrow::Cow;
 use wasm_bindgen::prelude::*;
 use web_sys::{ WebSocket, BinaryType, MessageEvent, ErrorEvent };
 use js_sys::{ ArrayBuffer, Uint8Array };
+use js_sys::Date;
+use wasm_cookies as cookies;
 
 
 pub static KEEPALIVE_INDEX : AtomicU64 = AtomicU64::new(0);
@@ -41,12 +44,28 @@ unsafe impl Sync for WebSocketContainer { }
 
 
 pub(super) fn start() {
-    let location     = web_sys::window().unwrap().location();
-    let session_code = { let s = location.hash().unwrap(); s.strip_prefix("#").unwrap_or(&s).to_string() };
+    let     window       = web_sys::window().unwrap();
+    let     location     = window.location();
+    let mut session_code = { let s = location.hash().unwrap(); s.strip_prefix("#").unwrap_or(&s).to_string() };
+    location.set_hash("").unwrap();
     if (session_code.is_empty()) {
-        crate::cover::open_cover_error(&format!("No session code"));
-        return;
+        if let Some(Ok((sc))) = cookies::get("voxidian-editor-session") {
+            session_code = sc;
+        } else {
+            crate::cover::open_cover_error(&format!("No session code"));
+            return;
+        }
     }
+    let cookie_expires = Date::new_0();
+    let cookie_expires_hours = 12.0;
+    cookie_expires.set_time(cookie_expires.get_time() + (cookie_expires_hours*3600000.0));
+    cookies::set("voxidian-editor-session", &session_code, &cookies::CookieOptions {
+        path      : Some("/editor"),
+        domain    : None,
+        expires   : Some(Cow::Owned(cookie_expires.to_utc_string().into())),
+        secure    : true,
+        same_site : cookies::SameSite::Strict,
+    });
     let protocol = match (location.protocol().unwrap().as_str()) {
         "http:" => "ws:",
         "https:" => "wss:",
@@ -80,6 +99,7 @@ pub(super) fn start() {
 
 
 fn on_ws_error(e : ErrorEvent) {
+    crate::errorjs2("Error in connection:\n".into(), (&e).into());
     crate::cover::open_cover_error(&format!("<b>Error in connection</b>:<br />{:?}", e));
     let _ = WS.close();
 }
@@ -93,7 +113,7 @@ fn on_ws_close() {
 
 fn on_ws_open() {
     WS.send(HandshakeC2SPacket {
-        session_code : WS.session_code().to_string(),
+        session_code : WS.session_code().into(),
     });
 
     let timeout_callback = Closure::<dyn FnMut() -> ()>::new(move || {
@@ -154,8 +174,8 @@ fn on_ws_message(e : MessageEvent) {
             }
             // File tree
             crate::filetree::clear();
-            for entry in initial_state.tree_entries {
-                crate::state::add_tree_entry(entry);
+            for entry in &*initial_state.tree_entries {
+                crate::state::add_tree_entry(entry.clone());
             }
             crate::filetree::sort();
         },
@@ -164,13 +184,16 @@ fn on_ws_message(e : MessageEvent) {
         S2CPackets::OvewriteFile(overwrite_file) => {
             if let Some(FilesEntry { is_open, fsname, .. }) = crate::state::FILES.write().get_mut(&overwrite_file.id) {
                 crate::filetabs::overwrite(overwrite_file.id, fsname, &overwrite_file.contents);
-                *is_open = Some(Some(overwrite_file.contents));
+                *is_open = Some(Some(match (overwrite_file.contents) {
+                    FileContents::NonText    => FilesEntryContents::NonText,
+                    FileContents::Text(text) => FilesEntryContents::Text(text.into_owned())
+                }));
             }
         },
 
 
         S2CPackets::PatchFile(patch_file) => {
-            if let Some(FilesEntry { is_open : Some(Some(FileContents::Text(old_client_shadow))), .. }) = crate::state::FILES.write().get_mut(&patch_file.id) {
+            if let Some(FilesEntry { is_open : Some(Some(FilesEntryContents::Text(old_client_shadow))), .. }) = crate::state::FILES.write().get_mut(&patch_file.id) {
                 let dmp = DiffMatchPatch::new();
                 let (new_client_shadow, _) = dmp.patch_apply(&patch_file.patches, &old_client_shadow).unwrap();
                 *old_client_shadow = new_client_shadow;
@@ -182,7 +205,7 @@ fn on_ws_message(e : MessageEvent) {
         S2CPackets::Selections(selections_event) => {
             if let Some((file_id, selections)) = selections_event.selections {
                 crate::code::remote_cursors::REMOTE_SELECTIONS.write().insert(selections_event.client_id, RemoteSelection {
-                    client_name : selections_event.client_name,
+                    client_name : selections_event.client_name.into_owned(),
                     colour      : selections_event.colour,
                     file_id,
                     selections,

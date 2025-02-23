@@ -2,24 +2,22 @@ use super::*;
 
 
 #[derive(Debug)]
-pub struct DisconnectS2CPacket {
-    pub reason : String
+pub struct DisconnectS2CPacket<'l> {
+    pub reason : Cow<'l, str>
 }
 
-impl PacketMeta for DisconnectS2CPacket {
+impl<'l> PacketMeta for DisconnectS2CPacket<'l> {
     const PREFIX : u8 = 0;
 }
 
-impl PacketEncode for DisconnectS2CPacket {
+impl<'l> PacketEncode for DisconnectS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
         buf.encode_write(&self.reason);
     }
 }
 
-impl PacketDecode for DisconnectS2CPacket {
+impl<'l> PacketDecode for DisconnectS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
-        Ok(Self {
-            reason : buf.read_decode()?
-        })
+        Ok(Self { reason : buf.read_decode()? })
     }
 }
