@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct OverwriteFileS2CPacket {
-    pub id       : u32,
+    pub id       : u64,
     pub contents : FileContents
 }
 

@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct SelectionsC2SPacket {
-    pub selections : Option<(u32, Vec<SelectionRange>)>
+    pub selections : Option<(u64, Vec<SelectionRange>)>
 }
 
 impl PacketMeta for SelectionsC2SPacket {

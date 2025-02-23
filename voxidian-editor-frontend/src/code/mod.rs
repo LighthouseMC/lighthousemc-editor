@@ -51,15 +51,15 @@ pub fn init() {
 
             (true, false, "w") => {
                 event.prevent_default();
-                if let Some(currently_focused) = crate::filetabs::currently_focused() {
-                    crate::state::close_file(currently_focused);
+                if let Some((file_id, file_path)) = crate::filetabs::currently_focused() {
+                    crate::state::close_file(file_id, file_path);
                 }
             },
 
             (true, false, "W") => {
                 event.prevent_default();
-                for file_id in crate::filetabs::list_all() {
-                    crate::state::close_file(file_id);
+                for (file_id, file_path) in crate::filetabs::list_all() {
+                    crate::state::close_file(file_id, file_path);
                 }
             },
 
@@ -83,11 +83,11 @@ pub fn open_nontext() { open("editor_right_main_nontext"); }
 
 pub fn open_load() { open("editor_right_main_loader"); }
 
-pub fn create_monaco(id : u32, file_name : &str, initial_script : &str, open : bool) {
+pub fn create_monaco(id : u64, file_name : &str, initial_script : &str, open : bool) {
     if (open) { close(); }
     monaco::create(id, file_name, initial_script.to_string(), open);
 }
-pub fn open_monaco(id : u32) {
+pub fn open_monaco(id : u64) {
     close();
     monaco::open(id);
 }
@@ -104,7 +104,7 @@ fn open(selected : &str) {
 }
 
 
-pub fn destroy_monaco(id : u32) {
+pub fn destroy_monaco(id : u64) {
     monaco::destroy(id);
 }
 

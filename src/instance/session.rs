@@ -4,7 +4,7 @@ use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketEncode, PrefixedP
 use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::{ C2SPackets, SelectionRange };
 use voxidian_editor_common::dmp::{ DiffMatchPatch, Patches, PatchInput, Efficient };
-use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverFileID, DBSubserverID };
+use voxidian_database::{ DBPlotID, DBFSFileID };
 use std::time::{ Instant, Duration };
 use std::sync::mpmc;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 
 pub(super) struct MaybePendingEditorSession {
-    pub(super) subserver   : DBSubserverID,
+    pub(super) plot        : DBPlotID,
     pub(super) client_uuid : Uuid,
     pub(super) client_name : String,
     pub(super) state       : MaybePendingEditorSessionState
@@ -55,13 +55,13 @@ enum EditorSessionOutgoingEvent {
 
     /// A file patch from the client was acknowledged. Apply it to the Server Shadow.
     PatchShadow {
-        id      : DBSubserverFileID,
+        id      : DBFSFileID,
         patches : Patches<Efficient>
     },
 
     /// A new Server Text snapshot is available. Diff it against the Server Shadow and send the patches to the client.
     FileContentsPatchToClient {
-        id          : DBSubserverFileID,
+        id          : DBFSFileID,
         server_text : String
     },
 
@@ -70,7 +70,7 @@ enum EditorSessionOutgoingEvent {
         client_id   : u64,
         client_name : String,
         colour      : u16,
-        selections  : Option<(DBSubserverFileID, Vec<SelectionRange>)>
+        selections  : Option<(DBFSFileID, Vec<SelectionRange>)>
     }
 
 }
@@ -81,13 +81,13 @@ enum EditorSessionIncomingEvent {
 
     /// Some patches were received from the client. Apply it to the Server Text.
     FilePatchFromClient {
-        id      : DBSubserverFileID,
+        id      : DBFSFileID,
         patches : Patches<Efficient>
     },
 
     /// Overwrites the previous client's editor selections.
     SelectionsFromClient {
-        selections : Option<(DBSubserverFileID, Vec<SelectionRange>)>
+        selections : Option<(DBFSFileID, Vec<SelectionRange>)>
     }
 
 }
@@ -97,14 +97,14 @@ pub(super) struct EditorSessionHandle {
     task                 : Option<JoinHandle<()>>,
     outgoing_event_tx    : mpmc::Sender<EditorSessionOutgoingEvent>,
     incoming_event_rx    : mpmc::Receiver<EditorSessionIncomingEvent>,
-    pending_patches      : Vec<(DBSubserverFileID, Patches<Efficient>)>,
+    pending_patches      : Vec<(DBFSFileID, Patches<Efficient>)>,
     remote_cursor_colour : u16,
-    selections           : Option<(DBSubserverFileID, Vec<SelectionRange>)>,
+    selections           : Option<(DBFSFileID, Vec<SelectionRange>)>,
     selection_changed    : bool,
     stopped              : bool
 }
 impl EditorSessionHandle {
-    pub fn new(client_uuid : Uuid, client_name : String, subserver : DBSubserverID, state : Arc<RwLock<EditorInstanceState>>, ws : WebSocketContainer) -> Self {
+    pub fn new(client_uuid : Uuid, client_name : String, subserver : DBFSFileID, state : Arc<RwLock<EditorInstanceState>>, ws : WebSocketContainer) -> Self {
         let (outgoing_event_tx, outgoing_event_rx) = mpmc::channel();
         let (incoming_event_tx, incoming_event_rx) = mpmc::channel();
         let mut session = EditorSession::new(subserver, state, ws,
@@ -129,10 +129,10 @@ impl EditorSessionHandle {
 
     pub fn client_name(&self) -> &str { &self.client_name }
 
-    pub fn pending_patches(&mut self) -> &mut Vec<(DBSubserverFileID, Patches<Efficient>)> {
+    pub fn pending_patches(&mut self) -> &mut Vec<(DBFSFileID, Patches<Efficient>)> {
         &mut self.pending_patches
     }
-    pub fn patch_file_to_client(&self, id : DBSubserverFileID, server_text : String) {
+    pub fn patch_file_to_client(&self, id : DBFSFileID, server_text : String) {
         let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::FileContentsPatchToClient {
             id,
             server_text
@@ -143,10 +143,10 @@ impl EditorSessionHandle {
     pub fn pop_selection_changed(&mut self) -> bool {
         mem::replace(&mut self.selection_changed, false)
     }
-    pub fn selections(&self) -> &Option<(DBSubserverFileID, Vec<SelectionRange>)> {
+    pub fn selections(&self) -> &Option<(DBFSFileID, Vec<SelectionRange>)> {
         &self.selections
     }
-    pub fn selections_to_client(&self, client_id : u64, client_name : String, colour : u16, selections : Option<(DBSubserverFileID, Vec<SelectionRange>)>) {
+    pub fn selections_to_client(&self, client_id : u64, client_name : String, colour : u16, selections : Option<(DBFSFileID, Vec<SelectionRange>)>) {
         let _ = self.outgoing_event_tx.send(EditorSessionOutgoingEvent::SelectionsToClient {
             client_id,
             client_name,
@@ -210,23 +210,23 @@ impl Drop for EditorSessionHandle {
 
 /// A 'session' is a connection from a single client to an `EditorInstance` over websocket.
 pub(super) struct EditorSession {
-    subserver         : DBSubserverID,
+    plot              : DBPlotID,
     last_keepalive    : (Instant, Result<u64, u64>),
     state             : Arc<RwLock<EditorInstanceState>>,
-    file_shadows      : HashMap<DBSubserverFileID, String>,
+    file_shadows      : HashMap<DBFSFileID, String>,
     ws                : WebSocketContainer,
     outgoing_event_rx : mpmc::Receiver<EditorSessionOutgoingEvent>,
     incoming_event_tx : mpmc::Sender<EditorSessionIncomingEvent>
 }
 impl EditorSession {
     fn new(
-        subserver         : DBSubserverID,
+        plot              : DBPlotID,
         state             : Arc<RwLock<EditorInstanceState>>,
         ws                : WebSocketContainer,
         outgoing_event_rx : mpmc::Receiver<EditorSessionOutgoingEvent>,
         incoming_event_tx : mpmc::Sender<EditorSessionIncomingEvent>
     ) -> Self { Self {
-        subserver,
+        plot,
         last_keepalive       : (Instant::now(), Ok(0)),
         state,
         file_shadows         : HashMap::new(),
@@ -242,22 +242,29 @@ impl EditorSession {
         self.send(LoginSuccessS2CPacket).await?;
         self.send(KeepaliveS2CPacket).await?;
         {
-            let mut state = self.state.write().await;
-            let properties = state.properties();
+            let state = self.state.write().await;
             self.send(InitialStateS2CPacket {
-                subserver_id          : self.subserver,
-                subserver_name        : properties.name.clone(),
-                subserver_owner_name  : properties.owner_name.clone(),
-                subserver_description : properties.description.clone(),
-                file_entities         : {
-                    let     file_entities = state.file_entities();
-                    let mut out           = Vec::with_capacity(file_entities.len());
-                    for (id, (path, kind)) in file_entities {
+                plot_id         : self.plot,
+                plot_owner_name : state.owner_name().to_string(),
+                tree_entries    : {
+                    let     directories = state.directories_ref();
+                    let     files       = state.files_ref();
+                    let mut out           = Vec::with_capacity(directories.len() + files.len());
+                    for (id, directory) in directories {
                         out.push(FileTreeEntry {
-                            id     : *id,
-                            is_dir : matches!(kind, DBSubserverFileEntityKind::Directory),
-                            path   : path.to_string()
-                        })
+                            id         : *id,
+                            is_dir     : true,
+                            parent_dir : directory.parent_dir,
+                            fsname     : directory.fsname.clone()
+                        });
+                    }
+                    for (id, file) in files {
+                        out.push(FileTreeEntry {
+                            id         : *id,
+                            is_dir     : true,
+                            parent_dir : file.parent_dir,
+                            fsname      : file.fsname.clone()
+                        });
                     }
                     out
                 },
@@ -394,7 +401,7 @@ impl EditorSession {
 
             C2SPackets::OpenFile(open_file) => {
                 let id = open_file.id;
-                if let Some((_, DBSubserverFileEntityKind::File(data))) = self.state.write().await.file_entities().get(&id) {
+                /*if let Some((_, DBSubserverFileEntityKind::File(data))) = self.state.write().await.file_entities().get(&id) {  // IMMEDIATELYFIX
                     if let Ok(text) = str::from_utf8(data) {
                         let _ = self.file_shadows.insert(id, text.to_string());
                         self.send(OverwriteFileS2CPacket {
@@ -407,7 +414,7 @@ impl EditorSession {
                             contents : FileContents::NonText
                         }).await?;
                     }
-                }
+                }*/
             },
 
 

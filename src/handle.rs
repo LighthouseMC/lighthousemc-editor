@@ -1,4 +1,4 @@
-use voxidian_database::DBSubserverID;
+use voxidian_database::DBPlotID;
 use std::sync::mpmc;
 use std::time::Duration;
 use async_std::task::{ block_on, yield_now };
@@ -9,7 +9,7 @@ use uuid::Uuid;
 pub(crate) enum EditorHandleIncomingEvent {
 
     StartSession {
-        subserver    : DBSubserverID,
+        subserver    : DBPlotID,
         timeout      : Duration,
         client_uuid  : Uuid,
         client_name  : String,
@@ -37,7 +37,7 @@ impl EditorHandle {
     /// Starts an editor session for the given subserver.
     /// The connection will be displayed in editor as the given display name.
     /// If a connection is not established within the given timeout duration, the session is cancelled.
-    pub fn start_session<const PW_LEN : usize>(&self, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String) -> String {
+    pub fn start_session<const PW_LEN : usize>(&self, subserver : DBPlotID, timeout : Duration, client_uuid : Uuid, client_name : String) -> String {
         let mut bytes = [0; PW_LEN];
         rand_priv_bytes(&mut bytes).unwrap();
         let session_code = bytes.map(|byte| rand_byte_to_char(byte)).into_iter().collect::<String>();
@@ -51,14 +51,18 @@ impl EditorHandle {
         session_code
     }
 
+    pub async fn stop(&self) {
+        let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::Stop);
+        loop {
+            if let Ok(EditorHandleOutgoingEvent::Stop) = self.handle_outgoing_rx.try_recv() { break; }
+            yield_now().await;
+        }
+    }
+
 }
 impl Drop for EditorHandle {
     fn drop(&mut self) {
-        let _ = self.handle_incoming_tx.send(EditorHandleIncomingEvent::Stop);
-        block_on(async{ loop {
-            if let Ok(EditorHandleOutgoingEvent::Stop) = self.handle_outgoing_rx.try_recv() { break; }
-            yield_now().await;
-        } });
+        block_on(async{ self.stop(); });
     }
 }
 

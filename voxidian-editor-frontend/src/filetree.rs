@@ -1,7 +1,5 @@
-use crate::iter::IteratorExt;
 use std::cell::LazyCell;
 use std::sync::{ Mutex, MutexGuard, RwLock };
-use std::collections::HashMap;
 use std::cmp::Ordering;
 use voxidian_editor_common::packet::s2c::FileTreeEntry;
 use wasm_bindgen::prelude::*;
@@ -11,7 +9,7 @@ use web_sys::{ DomTokenList, Element, MouseEvent };
 static FILETREE : FileTreeRootContainer = FileTreeRootContainer::new();
 struct FileTreeRootContainer {
     root  : LazyCell<Element>,
-    nodes : LazyCell<Mutex<HashMap<String, Element>>>
+    nodes : LazyCell<Mutex<Vec<(FileTreeEntry, Element)>>>
 }
 impl FileTreeRootContainer { const fn new() -> Self { Self {
     root : LazyCell::new(|| {
@@ -19,13 +17,13 @@ impl FileTreeRootContainer { const fn new() -> Self { Self {
         let document = window.document().unwrap();
         document.get_element_by_id("editor_filetree_root").unwrap()
     }),
-    nodes : LazyCell::new(|| Mutex::new(HashMap::new()))
+    nodes : LazyCell::new(|| Mutex::new(Vec::new()))
 } } }
 impl FileTreeRootContainer {
 
     fn root(&self) -> &Element { &self.root }
 
-    fn nodes(&self) -> MutexGuard<HashMap<String, Element>> { self.nodes.lock().unwrap() }
+    fn nodes(&self) -> MutexGuard<Vec<(FileTreeEntry, Element)>> { self.nodes.lock().unwrap() }
 
 }
 unsafe impl Sync for FileTreeRootContainer { }
@@ -93,21 +91,20 @@ pub fn clear() {
 }
 
 
-pub fn add(entry : &FileTreeEntry) {
+pub fn add(entry : FileTreeEntry) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
     let entry_root = document.create_element("li").unwrap();
 
-    let filename = entry.path.split("/").last().unwrap();
-    entry_root.set_attribute("editor_filetree_filename_lowercase", &filename.to_lowercase()).unwrap();
+    entry_root.set_attribute("editor_filetree_filename_lowercase", &entry.fsname.to_lowercase()).unwrap();
 
     if (entry.is_dir) {
         entry_root.set_attribute("editor_filetree_is_dir", "true").unwrap();
 
         let fold = document.create_element("div").unwrap();
         fold.class_list().toggle_with_force("editor_filetree_fold", true).unwrap();
-        fold.set_inner_html(filename);
+        fold.set_inner_html(&entry.fsname);
         entry_root.append_child(&fold).unwrap();
 
         let nest = document.create_element("ul").unwrap();
@@ -123,10 +120,11 @@ pub fn add(entry : &FileTreeEntry) {
         click_callback.forget();
 
         // Add existing children
-        let children_path_prefix = format!("{}/", entry.path);
-        for (path, child) in &*FILETREE.nodes() {
-            if (path.starts_with(&children_path_prefix)) {
-                entry_root.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(child).unwrap();
+        for (other_entry, child) in &*FILETREE.nodes() {
+            if let Some(other_parent_dir) = other_entry.parent_dir {
+                if (other_parent_dir == entry.id) {
+                    entry_root.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(child).unwrap();
+                }
             }
         }
 
@@ -140,30 +138,32 @@ pub fn add(entry : &FileTreeEntry) {
 
         let icon = document.create_element("i").unwrap();
         icon.class_list().toggle_with_force("editor_filetree_entry_icon", true).unwrap();
-        set_filename_icon_classes(filename, &icon.class_list());
+        set_filename_icon_classes(&entry.fsname, &icon.class_list());
         div.append_child(&icon).unwrap();
 
         let name = document.create_element("div").unwrap();
         name.class_list().toggle_with_force("editor_filetree_entry_name", true).unwrap();
-        name.set_inner_html(filename);
+        name.set_inner_html(&entry.fsname);
         div.append_child(&name).unwrap();
 
         let id = entry.id;
-        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, true); });
+
+        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, String::from("TODO"), true); });
         div.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref()).unwrap();
         click_callback.forget();
 
     }
 
     // Add to parent
-    let parent_path = entry.path.split("/").skip_last().intersperse("/").collect::<String>();
-    if (parent_path.is_empty()) {
+    if let Some(parent_dir) = entry.parent_dir {
+        if let Some((_, parent)) = FILETREE.nodes().iter().find(|(entry, _)| (! entry.is_dir) && parent_dir == entry.id) {
+            parent.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(&entry_root).unwrap();
+        }
+    } else {
         FILETREE.root().append_child(&entry_root).unwrap();
-    } else if let Some(parent) = FILETREE.nodes().get(&parent_path) {
-        parent.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(&entry_root).unwrap();
     }
 
-    FILETREE.nodes().insert(entry.path.clone(), entry_root);
+    FILETREE.nodes().push((entry, entry_root));
 }
 
 
@@ -203,22 +203,22 @@ pub fn sort() {
 }
 
 
-pub fn open(path : &str) {
+pub fn open_file(id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
     if let Some(element) = document.get_element_by_id("editor_filetree_selected") {
         element.remove_attribute("id").unwrap();
     }
     let nodes = FILETREE.nodes();
-    let Some(entry_root) = nodes.get(path) else { return };
-    entry_root.first_child().unwrap().dyn_into::<Element>().unwrap().set_id("editor_filetree_selected");
+    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && id == entry.id) else { return };
+    element.first_child().unwrap().dyn_into::<Element>().unwrap().set_id("editor_filetree_selected");
 }
 
 
-pub fn close(path : &str) {
+pub fn close_file(id : u64) {
     let nodes = FILETREE.nodes();
-    let Some(entry_root) = nodes.get(path) else { return };
-    entry_root.first_child().unwrap().dyn_into::<Element>().unwrap().remove_attribute("id").unwrap();
+    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && id == entry.id) else { return };
+    element.first_child().unwrap().dyn_into::<Element>().unwrap().remove_attribute("id").unwrap();
 }
 
 

@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct CloseFileC2SPacket {
-    pub id : u32
+    pub id : u64
 }
 
 impl PacketMeta for CloseFileC2SPacket {

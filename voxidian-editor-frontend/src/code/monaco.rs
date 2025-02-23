@@ -12,16 +12,16 @@ use serde::Deserialize as Deser;
 
 pub(super) static EDITORS : EditorsContainer = EditorsContainer::new();
 pub(super) struct EditorsContainer {
-    files : LazyCell<RwLock<HashMap<u32, js::Editor>>>
+    files : LazyCell<RwLock<HashMap<u64, js::Editor>>>
 }
 impl EditorsContainer { const fn new() -> Self { Self {
     files : LazyCell::new(|| RwLock::new(HashMap::new()))
 } } }
 impl EditorsContainer {
-    pub(super) fn read(&self) -> RwLockReadGuard<HashMap<u32, js::Editor>> {
+    pub(super) fn read(&self) -> RwLockReadGuard<HashMap<u64, js::Editor>> {
         self.files.read().unwrap()
     }
-    pub(super) fn write(&self) -> RwLockWriteGuard<HashMap<u32, js::Editor>> {
+    pub(super) fn write(&self) -> RwLockWriteGuard<HashMap<u64, js::Editor>> {
         self.files.write().unwrap()
     }
 }
@@ -261,7 +261,7 @@ pub fn init_theme() {
 }
 
 
-pub fn create(file_id : u32, file_name : &str, initial_script : String, open : bool) { // TODO: Edit history undo/redo
+pub fn create(file_id : u64, file_name : &str, initial_script : String, open : bool) { // TODO: Edit history undo/redo
     let initial_language = filename_to_language(file_name);
     require(move || {
         let window   = web_sys::window().unwrap();
@@ -347,7 +347,7 @@ pub fn create(file_id : u32, file_name : &str, initial_script : String, open : b
 }
 
 
-pub fn open(id : u32) {
+pub fn open(id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -362,7 +362,7 @@ pub fn open(id : u32) {
 }
 
 
-pub fn destroy(id : u32) {
+pub fn destroy(id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -380,7 +380,7 @@ pub fn destroy(id : u32) {
 }
 
 
-pub fn currently_focused() -> Option<u32> {
+pub fn currently_focused() -> Option<u64> {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -388,7 +388,7 @@ pub fn currently_focused() -> Option<u32> {
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
         if (container.class_list().contains("editor_right_main_selected")) {
-            return Some(container.get_attribute("editor_code_file_id").unwrap().parse::<u32>().unwrap());
+            return Some(container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap());
         }
     }
     None

@@ -18,11 +18,12 @@ use voxidian_editor_common::packet::{ PacketBuf, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::DisconnectS2CPacket;
 use voxidian_editor_common::packet::c2s::HandshakeC2SPacket;
 use voxidian_database::VoxidianDB;
-use std::net::SocketAddr;
+use std::net::{ SocketAddr, TcpListener };
 use std::io;
 use std::sync::{ mpmc, Arc };
 use std::time::Duration;
 use std::pin::pin;
+use std::task::Poll;
 use async_std::stream::StreamExt;
 use async_std::future::timeout;
 use async_std::task::yield_now;
@@ -37,15 +38,14 @@ pub struct EditorServer(());
 impl EditorServer {
 
 
-    pub async fn run<A : ToSocketAddrs, F : Fn(EditorHandle) -> ()>(bind_addr : A, db : Arc<VoxidianDB>, f : F) -> Result<(), io::Error> {
-        let bind_addr = bind_addr.into();
+    pub async fn run<F : AsyncFnOnce(EditorHandle) -> ()>(bind_addrs : &[SocketAddr], db : Arc<VoxidianDB>, display_connect_address : String, f : F) -> Result<(), io::Error> {
         let mut server = tide::new();
 
         server.at("/robots.txt").get(Self::handle_robotstxt);
 
         server.at("/assets/image/logo_transparent.png").get(|req| Self::handle_asset(req, mime::PNG, include_bytes!("assets/image/logo_transparent.png")));
 
-        //server.at("/").get(Self::handle_root);
+        server.at("/").get(move |req| Self::handle_root(req, display_connect_address.clone()));
 
         server.at("/editor").get(Self::handle_editor);
         server.at("/editor/voxidian_editor_frontend.js").get(|req| Self::handle_asset(req, mime::JAVASCRIPT, include_bytes!("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js")));
@@ -53,7 +53,7 @@ impl EditorServer {
 
         let (add_ws_tx, add_ws_rx) = mpmc::channel();
         server.at("/editor/ws").get(
-            WebSocket::new(move |req, stream| Self::handle_editor_ws(req, stream, bind_addr, add_ws_tx.clone()))
+            WebSocket::new(move |req, stream| Self::handle_editor_ws(stream, add_ws_tx.clone()))
                 .with_protocols(&["voxidian-editor"])
         );
 
@@ -64,20 +64,18 @@ impl EditorServer {
         f(EditorHandle {
             handle_incoming_tx,
             handle_outgoing_rx
-        });
+        }).await;
         let mut instance_manager = EditorInstanceManager::new(handle_incoming_rx, handle_outgoing_tx, add_ws_rx);
 
-        let mut a      = pin!(server.listen(bind_addr));
-        let mut b      = pin!(instance_manager.run(db));
-        let mut b_done = false;
+        let mut a = pin!(server.listen(TcpListener::bind(bind_addrs)?));
+        let mut b = pin!(instance_manager.run(db));
         loop {
-            let ap = poll!(&mut a);
-            if (ap.is_ready()) { return a.await; }
-            if (! b_done) {
-                let bp = poll!(&mut b);
-                if (bp.is_ready()) {
-                    b_done = true;
-                }
+            if let Poll::Ready(out) = poll!(&mut a) {
+                if let Err(out) = out { return Err(out); }
+                else { panic!("Editor server terminated.") }
+            }
+            if let Poll::Ready(_) = poll!(&mut b) {
+                return Ok(());
             }
             yield_now().await;
         }
@@ -93,8 +91,11 @@ impl EditorServer {
     }
 
 
-    async fn handle_root(_ : Request<()>) -> tide::Result {
-        Ok(Response::builder(200).content_type(mime::HTML).body(include_str!("assets/template/root.html")).build())
+    async fn handle_root(_ : Request<()>, display_connect_address : String) -> tide::Result {
+        Ok(Response::builder(200).content_type(mime::HTML).body(
+            include_str!("assets/template/root.html")
+                .replace("{{CONNECT_ADDRESS}}", &display_connect_address)
+        ).build())
     }
 
 
@@ -107,7 +108,7 @@ impl EditorServer {
     }
 
 
-    async fn handle_editor_ws(_ : Request<()>, mut ws : WebSocketConnection, _ : SocketAddr, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
+    async fn handle_editor_ws(mut ws : WebSocketConnection, add_ws_tx : mpmc::Sender<(WebSocketContainer, String)>) -> tide::Result<()> {
         /*if let Some(host) = req.host() && let Ok(host) = host.parse::<SocketAddr>() && host == bind_addr {} else {
             return Err(tide::Error::from_str(403, "403 Access Forbidden"));
         }*/ // TODO: Fix this

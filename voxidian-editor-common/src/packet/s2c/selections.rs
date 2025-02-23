@@ -7,7 +7,7 @@ pub struct SelectionsS2CPacket {
     pub client_id   : u64,
     pub client_name : String,
     pub colour      : u16,
-    pub selections  : Option<(u32, Vec<SelectionRange>)>
+    pub selections  : Option<(u64, Vec<SelectionRange>)>
 }
 
 impl PacketMeta for SelectionsS2CPacket {
@@ -40,7 +40,7 @@ impl PacketDecode for SelectionsS2CPacket {
             client_name : buf.read_decode()?,
             colour      : buf.read_decode()?,
             selections  : if (buf.read_decode::<bool>()?){
-                let     file_id    = buf.read_decode::<u32>()?;
+                let     file_id    = buf.read_decode::<u64>()?;
                 let     len        = buf.read_decode::<u32>()? as usize;
                 let mut selections = Vec::with_capacity(len);
                 for _ in 0..len { selections.push(SelectionRange {

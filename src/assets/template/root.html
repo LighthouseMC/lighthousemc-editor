@@ -53,6 +53,7 @@
                 color: #ffffff;
                 width: max-content;
                 text-shadow: -5px -5px 0 #000, 5px -5px 0 #000, -5px 5px 0 #000, 5px 5px 0 #000;
+                user-select: none;
             }
             #header #header_info {
                 margin-left: auto;
@@ -60,7 +61,7 @@
                 padding: 15px;
                 background-color: rgb(0,0,0,0.75);
                 border-radius: 15px;
-                cursor: grab; cursor: -webkit-grabbing; cursor: grabbing;
+                cursor: pointer;
                 user-select: none;
             }
             #header #header_info h3 {
@@ -130,11 +131,18 @@
                 color: #ffffff;
             }
             #main h2 {
-                font-size: 15pt;
+                font-size: 14pt;
                 font-family: "Roboto Condensed", serif;
                 font-weight: 375;
                 font-style: normal;
                 color: #ffffff;
+            }
+            #main p {
+                font-size: 13pt;
+                font-family: "Roboto Condensed", serif;
+                font-weight: 375;
+                font-style: normal;
+                color: #e7e7e7;
             }
             #main .icon_grid {
                 margin: 15px;
@@ -216,7 +224,7 @@
             <div id="header_background"><div id="header_title"><h1>LighthouseMC</h1></div></div>
             <div id="header_info" onclick="click_header_info();" onmouseover="hover_header_info();", onmouseout="unhover_header_info();">
                 <h3>Connect at</h3>
-                <h2 id="header_address">192.168.1.214:25565</h2>
+                <h2 id="header_address">{{CONNECT_ADDRESS}}</h2>
                 <span class="tooltip tooltip_bottom" style="width: 137.5px;"><h3 id="header_address_copy">Click to Copy</h3></span>
             </div>
         </div>

@@ -1,7 +1,6 @@
 //! https://neil.fraser.name/writing/sync/
 
 
-use crate::state::FilesEntryKind;
 use crate::code::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
 use crate::code::remote_cursors;
 use voxidian_editor_common::packet::s2c::FileContents;
@@ -16,10 +15,10 @@ pub fn send_patches_to_server() {
     let containers = document.get_elements_by_class_name("editor_code_container");
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
-        let id = container.get_attribute("editor_code_file_id").unwrap().parse::<u32>().unwrap();
+        let id = container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap();
 
         let mut files = crate::state::FILES.write();
-        let FilesEntryKind::File { is_open : Some(Some(FileContents::Text(client_shadow))) } = &mut files.get_mut(&id).unwrap().kind else { continue };
+        let Some(Some(FileContents::Text(client_shadow))) = &mut files.get_mut(&id).unwrap().is_open else { continue };
         let client_text = monaco::EDITORS.read()[&id].get_model().get_value(1);
 
         if (client_shadow != &client_text) {
@@ -40,7 +39,7 @@ pub fn send_patches_to_server() {
 }
 
 
-pub fn apply_patches_from_server(file_id : u32, patches : Patches<Efficient>) {
+pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -161,7 +160,6 @@ fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, sta
         | (true, true, true, true, false, true, true, true, false, true, false)
         | (true, true, false, true, false, false, true, false, false, false, false)
         | (true, false, true, false, false, true, false, false, false, false, false)
-        | (false, true, false, false, false, false, true, false, true, false, false)
         => (start, end), // Change entirely after selection
 
         (false, false, true, false, false, false, false, false, false, false, false)

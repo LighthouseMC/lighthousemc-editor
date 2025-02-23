@@ -38,7 +38,7 @@ pub(crate) struct RemoteSelectionsContainer {
 pub(crate) struct RemoteSelection {
     pub client_name : String,
     pub colour      : u16,
-    pub file_id     : u32,
+    pub file_id     : u64,
     pub selections  : Vec<SelectionRange>
 }
 impl RemoteSelectionsContainer { const fn new() -> Self { Self {
@@ -76,7 +76,7 @@ pub(crate) fn update() {
     let remote_selections = REMOTE_SELECTIONS.read();
     for i in 0..filetree_entries.length() {
         let filetree_entry = filetree_entries.get_with_index(i).unwrap();
-        let file_id = filetree_entry.get_attribute("editor_filetree_file_id").unwrap().parse::<u32>().unwrap();
+        let file_id = filetree_entry.get_attribute("editor_filetree_file_id").unwrap().parse::<u64>().unwrap();
         let mut markers = Vec::new();
         for (client_id, remote_selection) in &*remote_selections {
             if (remote_selection.file_id == file_id) {
@@ -96,7 +96,7 @@ pub(crate) fn update() {
 }
 
 
-pub(crate) fn update_known(file_id : u32, editor : &Editor) {
+pub(crate) fn update_known(file_id : u64, editor : &Editor) {
 
     // Add markers in the file.
     let model = editor.get_model();

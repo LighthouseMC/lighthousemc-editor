@@ -10,7 +10,7 @@ use voxidian_editor_common::packet::PacketBuf;
 use voxidian_editor_common::packet::s2c::DisconnectS2CPacket;
 use voxidian_editor_common::dmp::DiffMatchPatch;
 use voxidian_logger::{ debug, trace };
-use voxidian_database::{ DBSubserverFileEntityKind, DBSubserverID, VoxidianDB };
+use voxidian_database::{ VoxidianDB, DBPlotID, DBError };
 use std::sync::{ mpmc, Arc };
 use std::collections::HashMap;
 use std::time::{ Instant, Duration };
@@ -23,7 +23,7 @@ pub(crate) struct EditorInstanceManager {
     handle_incoming_rx : mpmc::Receiver<EditorHandleIncomingEvent>,
     handle_outgoing_tx : mpmc::Sender<EditorHandleOutgoingEvent>,
     add_ws_rx          : mpmc::Receiver<(WebSocketContainer, String)>,
-    instances          : HashMap<DBSubserverID, EditorInstance>
+    instances          : HashMap<DBPlotID, EditorInstance>
 }
 impl EditorInstanceManager {
     pub(crate) fn new(
@@ -35,7 +35,7 @@ impl EditorInstanceManager {
         handle_outgoing_tx,
         add_ws_rx,
         instances          : HashMap::new()
-    } } 
+    } }
 }
 impl EditorInstanceManager {
 
@@ -67,10 +67,10 @@ impl EditorInstanceManager {
                         let session = &mut instance.sessions.get_mut(&session_id).unwrap();
                         if let MaybePendingEditorSessionState::Pending { session_code, .. } = &session.state {
                             if (&given_session_code == session_code) {
-                                trace!("{} logged in to editor session for subserver {}.", session.client_name, instance.subserver);
+                                trace!("{} logged in to editor session for subserver {}.", session.client_name, instance.plot);
                                 let handle = EditorSessionHandle::new(
                                     session.client_uuid, session.client_name.clone(),
-                                    session.subserver, instance.state.clone(),
+                                    session.plot, instance.state.clone(),
                                     ws
                                 );
                                 for (other_session_id, other_session) in &instance.sessions {
@@ -93,17 +93,21 @@ impl EditorInstanceManager {
     }
 
 
-    fn get_or_create_instance(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID) -> &mut EditorInstance {
-        self.instances.entry(subserver).or_insert_with(|| {
-            debug!("Opened editor instance for subserver {}.", subserver);
-            EditorInstance::new(db.clone(), subserver)
-        })
+    async fn get_or_create_instance(&mut self, db : &Arc<VoxidianDB>, plot : DBPlotID) -> Result<&mut EditorInstance, DBError> {
+        if (self.instances.contains_key(&plot)) {
+            Ok(self.instances.get_mut(&plot).unwrap())
+        } else {
+            debug!("Opened editor instance for subserver {}.", plot);
+            let instance = EditorInstance::new(db.clone(), plot).await?;
+            Ok(self.instances.entry(plot).or_insert(instance))
+        }
     }
 
 
-    fn start_session(&mut self, db : &Arc<VoxidianDB>, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) {
-        let instance = self.get_or_create_instance(db, subserver);
-        instance.start_session(subserver, timeout, client_uuid, client_name, session_code);
+    async fn start_session(&mut self, db : &Arc<VoxidianDB>, plot : DBPlotID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) -> Result<(), DBError> {
+        let instance = self.get_or_create_instance(db, plot).await?;
+        instance.start_session(plot, timeout, client_uuid, client_name, session_code);
+        Ok(())
     }
 
 
@@ -113,37 +117,37 @@ impl EditorInstanceManager {
 /// An 'instance' holds the current state of a subserver's codebase.
 ///  Multiple sessions can connect to it.
 struct EditorInstance {
-    subserver    : DBSubserverID,
+    plot         : DBPlotID,
     sessions     : HashMap<u64, MaybePendingEditorSession>,
     next_session : u64,
     state        : Arc<RwLock<EditorInstanceState>>
 }
 impl EditorInstance {
-    pub fn new(db : Arc<VoxidianDB>, subserver : DBSubserverID) -> Self { Self {
-        subserver,
+    pub async fn new(db : Arc<VoxidianDB>, plot : DBPlotID) -> Result<Self, DBError> { Ok(Self {
+        plot,
         sessions     : HashMap::new(),
         next_session : 0,
-        state        : Arc::new(RwLock::new(EditorInstanceState::open(db, subserver)))
-    } } 
+        state        : Arc::new(RwLock::new(EditorInstanceState::open(db, plot).await?))
+    }) }
 }
 impl EditorInstance {
 
 
-    fn start_session(&mut self, subserver : DBSubserverID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) {
+    fn start_session(&mut self, plot : DBPlotID, timeout : Duration, client_uuid : Uuid, client_name : String, session_code : String) {
         // Shut down old sessions owned by this player.
         self.sessions.retain(|_, session| {
             if (session.client_uuid == client_uuid) {match (&session.state) {
                 MaybePendingEditorSessionState::Pending { .. } => {
-                    trace!("Closed editor session for player {} subserver {}.", session.client_name, self.subserver);
+                    trace!("Closed editor session for player {} subserver {}.", session.client_name, self.plot);
                     false
                 },
                 MaybePendingEditorSessionState::Active(handle) => { handle.stop(EditorSessionStopReason::LoggedInElsewhere); true },
             } } else { true }
         });
         // Start the new session.
-        trace!("{} opened an editor session for subserver {}.", client_name, subserver);
+        trace!("{} opened an editor session for subserver {}.", client_name, plot);
         self.sessions.insert(self.next_session, MaybePendingEditorSession {
-            subserver,
+            plot,
             client_uuid,
             client_name,
             state : MaybePendingEditorSessionState::Pending {
@@ -173,7 +177,7 @@ impl EditorInstance {
                 }
             }
         }
-        for (file_id, patches) in all_patches {
+        /*for (file_id, patches) in all_patches { // IMMEDIATELYFIX
             if let Some((_, DBSubserverFileEntityKind::File(server_data))) = self.state.write_blocking().file_entities().get_mut(&file_id) {
                 if let Ok(mut server_text) = String::from_utf8(server_data.clone()) {
                     let dmp = DiffMatchPatch::new();
@@ -186,7 +190,7 @@ impl EditorInstance {
                     *server_data = server_text.into_bytes();
                 }
             }
-        }
+        }*/
 
         // Broadcast selection updates.
         for source_session_id in self.sessions.keys().map(|k| *k).collect::<Vec<_>>() {
@@ -213,7 +217,7 @@ impl EditorInstance {
                 MaybePendingEditorSessionState::Active(handle) => { ! handle.can_drop() },
             };
             if (! retain) {
-                trace!("Closed editor session for player {} subserver {}.", session.client_name, self.subserver);
+                trace!("Closed editor session for player {} plot {}.", session.client_name, self.plot);
             }
             retain
         });
@@ -221,7 +225,7 @@ impl EditorInstance {
         // Close this instance if there are no sessions.
         let retain = ! self.sessions.is_empty();
         if (! retain) {
-            debug!("Closed editor instance for subserver {}.", self.subserver);
+            debug!("Closed editor instance for plot {}.", self.plot);
         }
         retain
     }

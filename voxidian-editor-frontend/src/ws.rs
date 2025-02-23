@@ -1,4 +1,4 @@
-use crate::state::{ FilesEntry, FilesEntryKind };
+use crate::state::FilesEntry;
 use crate::code::remote_cursors::RemoteSelection;
 use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
 use voxidian_editor_common::packet::s2c::{ S2CPackets, FileContents };
@@ -10,7 +10,6 @@ use std::mem::MaybeUninit;
 use std::sync::atomic::{ AtomicU64, Ordering };
 use wasm_bindgen::prelude::*;
 use web_sys::{ WebSocket, BinaryType, MessageEvent, ErrorEvent };
-use web_sys::HtmlInputElement;
 use js_sys::{ ArrayBuffer, Uint8Array };
 
 
@@ -111,7 +110,7 @@ fn on_ws_message(e : MessageEvent) {
     let     packet = S2CPackets::decode_prefixed(&mut buf).unwrap();
     match (packet) {
 
-    
+
         S2CPackets::Disconnect(disconnect) => {
             crate::cover::open_cover_error(&format!("<b>Server disconnected</b>:<br />{}", disconnect.reason));
             let _ = WS.close();
@@ -142,50 +141,36 @@ fn on_ws_message(e : MessageEvent) {
         S2CPackets::InitialState(initial_state) => {
             let window   = web_sys::window().unwrap();
             let document = window.document().unwrap();
-            // Subserver ID
-            let subserver_id  = initial_state.subserver_id.to_string();
+            // Subserver id
+            let subserver_id  = initial_state.plot_id.to_string();
             let subserver_ids = document.get_elements_by_class_name("template_subserver_id");
             for i in 0..subserver_ids.length() {
                 subserver_ids.get_with_index(i).unwrap().set_inner_html(&subserver_id);
             }
-            // Subserver name
-            let subserver_names = document.get_elements_by_class_name("template_subserver_name");
-            for i in 0..subserver_names.length() {
-                subserver_names.get_with_index(i).unwrap().set_inner_html(&initial_state.subserver_name);
-            }
-            document.get_element_by_id("subserver_properties_editor_name").unwrap().dyn_into::<HtmlInputElement>().unwrap()
-                .set_value(&initial_state.subserver_name);
             // Subserver owner name
             let subserver_owner_names = document.get_elements_by_class_name("template_subserver_owner_name");
             for i in 0..subserver_owner_names.length() {
-                subserver_owner_names.get_with_index(i).unwrap().set_inner_html(&initial_state.subserver_owner_name);
+                subserver_owner_names.get_with_index(i).unwrap().set_inner_html(&initial_state.plot_owner_name);
             }
-            // Subserver description
-            let subserver_descriptions = document.get_elements_by_class_name("template_subserver_description");
-            for i in 0..subserver_descriptions.length() {
-                subserver_descriptions.get_with_index(i).unwrap().set_inner_html(&initial_state.subserver_description);
-            }
-            document.get_element_by_id("subserver_properties_editor_description").unwrap().dyn_into::<HtmlInputElement>().unwrap()
-                .set_value(&initial_state.subserver_description);
             // File tree
             crate::filetree::clear();
-            for entry in initial_state.file_entities {
-                crate::state::add_file(&entry);
+            for entry in initial_state.tree_entries {
+                crate::state::add_tree_entry(entry);
             }
             crate::filetree::sort();
         },
 
 
         S2CPackets::OvewriteFile(overwrite_file) => {
-            if let Some(FilesEntry { path, kind : FilesEntryKind::File { is_open }, .. }) = crate::state::FILES.write().get_mut(&overwrite_file.id) {
-                crate::filetabs::overwrite(overwrite_file.id, path, &overwrite_file.contents);
+            if let Some(FilesEntry { is_open, fsname, .. }) = crate::state::FILES.write().get_mut(&overwrite_file.id) {
+                crate::filetabs::overwrite(overwrite_file.id, fsname, &overwrite_file.contents);
                 *is_open = Some(Some(overwrite_file.contents));
             }
         },
 
 
         S2CPackets::PatchFile(patch_file) => {
-            if let Some(FilesEntry { kind : FilesEntryKind::File { is_open : Some(Some(FileContents::Text(old_client_shadow))) }, .. }) = crate::state::FILES.write().get_mut(&patch_file.id) {
+            if let Some(FilesEntry { is_open : Some(Some(FileContents::Text(old_client_shadow))), .. }) = crate::state::FILES.write().get_mut(&patch_file.id) {
                 let dmp = DiffMatchPatch::new();
                 let (new_client_shadow, _) = dmp.patch_apply(&patch_file.patches, &old_client_shadow).unwrap();
                 *old_client_shadow = new_client_shadow;

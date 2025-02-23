@@ -4,7 +4,7 @@ use diff_match_patch_rs::{ DiffMatchPatch, Efficient, Patches };
 
 #[derive(Debug)]
 pub struct PatchFileS2CPacket {
-    pub id      : u32,
+    pub id      : u64,
     pub patches : Patches<Efficient>
 }
 
