@@ -1,11 +1,12 @@
+use crate::EditorCommand;
 use voxidian_database::{ DBPlayerID, DBPlotID };
 use std::time::Duration;
 use tokio::sync::mpsc;
 
 
 pub struct EditorHandle {
-                commands_tx : mpsc::Sender<EditorCommand>,
-    pub(super)  commands_rx : Option<mpsc::Receiver<EditorCommand>>
+    pub(super) commands_tx : mpsc::Sender<EditorCommand>,
+    pub(super) commands_rx : Option<mpsc::Receiver<EditorCommand>>
 }
 
 impl EditorHandle {
@@ -53,22 +54,22 @@ impl EditorHandle {
         response_rx.recv().await.ok_or(())
     }
 
-}
-
-
-pub(crate) enum EditorCommand {
-
-    OpenSession {
-        plot_id       : DBPlotID,
-        user_id       : DBPlayerID,
-        username      : String,
-        login_timeout : Duration,
-        // Session code.
-        response_tx   : mpsc::Sender<String>
-    },
-
-    Close {
-        response_tx : mpsc::Sender<()>
+    /// Shuts down the editor.
+    ///
+    /// # Returns
+    /// Returns `Ok(())`, or `Err(())` if the editor has closed.
+    pub fn close_blocking(&self) -> Result<(), ()> {
+        let (response_tx, mut response_rx) = mpsc::channel(1);
+        self.commands_tx.blocking_send(EditorCommand::Close {
+            response_tx
+        }).map_err(|_| ())?;
+        response_rx.blocking_recv().ok_or(())
     }
 
+}
+
+impl Drop for EditorHandle {
+    fn drop(&mut self) {
+        let _ = self.close_blocking();
+    }
 }

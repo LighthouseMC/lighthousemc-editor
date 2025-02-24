@@ -4,13 +4,14 @@
 
 
 use voxidian_editor_common::packet;
-use voxidian_database::VoxidianDB;
+use voxidian_database::{ VoxidianDB, DBPlayerID, DBPlotID };
 use std::io;
 use std::time::Duration;
 use std::sync::Arc;
 use tokio::sync::{ mpsc, Mutex };
 use tokio::net::{ TcpListener, ToSocketAddrs };
 use tokio::time::timeout;
+use tokio::task::JoinSet;
 use axum::{ self, Router };
 use axum::http::StatusCode;
 use axum::http::{ HeaderValue, header::CONTENT_TYPE };
@@ -46,13 +47,31 @@ pub use handle::*;
 
 
 struct EditorServerShared {
-    commands_rx : Mutex<mpsc::Receiver<EditorCommand>>,
+    commands_tx : mpsc::Sender<EditorCommand>,
     database    : Arc<VoxidianDB>
+}
+
+enum EditorCommand {
+
+    OpenSession {
+        plot_id       : DBPlotID,
+        user_id       : DBPlayerID,
+        username      : String,
+        login_timeout : Duration,
+        // Session code.
+        response_tx   : mpsc::Sender<String>
+    },
+
+    Close {
+        response_tx : mpsc::Sender<()>
+    }
+
 }
 
 
 pub struct EditorServer {
     display_game_address : String,
+    commands_tx          : mpsc::Sender<EditorCommand>,
     commands_rx          : mpsc::Receiver<EditorCommand>,
     database             : Arc<VoxidianDB>
 }
@@ -66,6 +85,7 @@ impl EditorServer {
     ) -> Self {
         Self {
             display_game_address,
+            commands_tx          : handle.commands_tx.clone(),
             commands_rx          : handle.commands_rx.take().expect("given `EditorHandle` is already controlled by an `EditorServer`"),
             database
         }
@@ -100,13 +120,34 @@ impl EditorServer {
 
         // State
         let app = app.with_state(Arc::new(EditorServerShared {
-            commands_rx : Mutex::new(self.commands_rx),
+            commands_tx : self.commands_tx,
             database    : self.database
         }));
 
-        // Run
+        // Begin listening
         let listener = TcpListener::bind(bind_addrs).await?;
-        axum::serve(listener, app.into_make_service()).await
+
+        let mut set = JoinSet::new();
+        // Start web server
+        set.spawn(axum::serve(listener, app.into_make_service()).into_future());
+        // Start instance manager
+        // TODO
+
+        // Run
+        while let Some(out) = set.join_next().await {
+            match (out) {
+                Ok(Ok(_)) => { },
+                Ok(Err(err)) => {
+                    set.abort_all();
+                    return Err(err);
+                }
+                Err(err) => {
+                    set.abort_all();
+                    return Err(io::Error::new(io::ErrorKind::Other, format!("{}", err)));
+                }
+            }
+        }
+        Ok(())
     }
 
 

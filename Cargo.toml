@@ -29,7 +29,7 @@ path = "../voxidian-database"
 
 [dependencies.axum]
 version  = "0.8.1"
-features = [ "ws" ]
+features = [ "ws", "tokio" ]
 [dependencies.tokio]
 version  = "1.43"
 features = [ "full" ]
