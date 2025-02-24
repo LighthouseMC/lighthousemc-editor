@@ -125,6 +125,7 @@ fn on_ws_open() {
 
 
 fn on_ws_message(e : MessageEvent) {
+    crate::warnjs(e.clone().into());
     let     data   = Uint8Array::new(&e.data().dyn_into::<ArrayBuffer>().unwrap()).to_vec();
     let mut buf    = PacketBuf::from(data);
     let     packet = S2CPackets::decode_prefixed(&mut buf).unwrap();

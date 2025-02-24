@@ -27,9 +27,6 @@ path = "../voxidian-logger"
 [dependencies.voxidian-database]
 path = "../voxidian-database"
 
-[dependencies.axecs]
-path = "../../ecs/axecs"
-
 [dependencies.axum]
 version  = "0.8.1"
 features = [ "ws" ]

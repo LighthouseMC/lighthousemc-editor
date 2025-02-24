@@ -4,9 +4,11 @@
 
 
 use voxidian_editor_common::packet;
+use voxidian_database::VoxidianDB;
 use std::io;
 use std::time::Duration;
 use std::sync::Arc;
+use tokio::sync::{ mpsc, Mutex };
 use tokio::net::{ TcpListener, ToSocketAddrs };
 use tokio::time::timeout;
 use axum::{ self, Router };
@@ -35,15 +37,39 @@ macro str_replace_multiple {
 }
 
 
-mod instance;
-pub use instance::*;
+mod handle;
+pub use handle::*;
+
+//mod instance;
+
+//mod session;
+
+
+struct EditorServerShared {
+    commands_rx : Mutex<mpsc::Receiver<EditorCommand>>,
+    database    : Arc<VoxidianDB>
+}
 
 
 pub struct EditorServer {
-    pub display_game_address : String,
-    pub instances            : Arc<EditorInstances>
+    display_game_address : String,
+    commands_rx          : mpsc::Receiver<EditorCommand>,
+    database             : Arc<VoxidianDB>
 }
 impl EditorServer {
+
+
+    pub fn new(
+        display_game_address : String,
+        handle               : &mut EditorHandle,
+        database             : Arc<VoxidianDB>
+    ) -> Self {
+        Self {
+            display_game_address,
+            commands_rx          : handle.commands_rx.take().expect("given `EditorHandle` is already controlled by an `EditorServer`"),
+            database
+        }
+    }
 
 
     pub async fn run<A : ToSocketAddrs>(self, bind_addrs : A) -> Result<(), io::Error> {
@@ -73,7 +99,10 @@ impl EditorServer {
         let app = app.fallback((StatusCode::NOT_FOUND, Html(include_str!("assets/template/404.html"))));
 
         // State
-        let app = app.with_state(self.instances);
+        let app = app.with_state(Arc::new(EditorServerShared {
+            commands_rx : Mutex::new(self.commands_rx),
+            database    : self.database
+        }));
 
         // Run
         let listener = TcpListener::bind(bind_addrs).await?;
@@ -89,15 +118,16 @@ impl EditorServer {
 
 
     async fn handle_editor_ws(
-        upgrade   : ws::WebSocketUpgrade,
-        instances : State<Arc<EditorInstances>>
+        upgrade : ws::WebSocketUpgrade,
+        shared  : State<Arc<EditorServerShared>>
     ) -> impl IntoResponse {
         upgrade.protocols(["voxidian-editor"])
-            .on_upgrade(move |socket| Self::handle_editor_socket(socket, instances.0))
+            .on_upgrade(move |socket| Self::handle_editor_socket(socket, shared.0))
     }
+
     async fn handle_editor_socket(
-        mut socket    : ws::WebSocket,
-            instances : Arc<EditorInstances>
+        mut socket  : ws::WebSocket,
+            shared  : Arc<EditorServerShared>
     ) {
 
         let session_code = match (timeout(Duration::from_millis(2500), socket.recv()).await) {
@@ -120,14 +150,17 @@ impl EditorServer {
             }
         };
 
-        let Some(mut session) = instances.get_pending_session(&session_code).await else {
+        voxidian_logger::warn!("{}", session_code);
+        let _ = socket.send(ws::Message::Binary(packet::encode(packet::s2c::DisconnectS2CPacket { reason : "TODO".into() }).into())).await;
+
+        /*let Some(mut session) = instances.get_pending_session(&session_code).await else {
             let _ = socket.send(ws::Message::Binary(packet::encode(packet::s2c::DisconnectS2CPacket {
                 reason : "Invalid session code. Has it expired?".into()
-            }).into())).await;
+            }).into()));
             return;
-        };
+        };*/
 
-        session.activate(socket);
+        //session.activate(socket);
     }
 
 

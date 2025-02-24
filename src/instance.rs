@@ -1,10 +1,10 @@
-use voxidian_editor_common::packet::{ self, PrefixedPacketEncode };
+use crate::session::*;
 use voxidian_editor_common::packet::s2c::DisconnectS2CPacket;
+use voxidian_logger::debug;
 use voxidian_database::{ VoxidianDB, DBPlotID };
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use axecs::util::rwlock::{ RwLock, RwLockReadGuard, RwLockWriteGuard };
-use axum::extract::ws;
+use std::time::Duration;
 use openssl::rand;
 use uuid::Uuid;
 
@@ -22,22 +22,48 @@ impl EditorInstances {
 
     pub async fn get_or_create_instance(&self, plot_id : DBPlotID) -> RwLockWriteGuard<EditorInstance> {
         self.instances.write().await.entry(plot_id)
-            .or_insert_with(|| RwLock::new(EditorInstance::new(Arc::clone(&self.db), plot_id)))
+            .or_insert_with(|| {
+                debug!("Opened editor instance on plot {}.", plot_id);
+                RwLock::new(EditorInstance::new(Arc::clone(&self.db), plot_id))
+            })
             .write().await
     }
 
     pub async fn get_pending_session(&self, session_code : &str) -> Option<RwLockWriteGuard<EditorSession>> {
-        for (_, instance) in &*self.instances.read().await {
+        for (_, instance) in &*self.instances.write().await {
             for session in &*instance.read().await.sessions {
                 let session = session.write().await;
-                if let EditorSessionMode::Pending(pending) = &session.mode {
-                    if (pending.session_code == session_code) {
+                if let EditorSessionMode::Pending(_) = &session.mode {
+                    if (session.session_code == session_code) {
                         return Some(session);
                     }
                 }
             }
         }
         None
+    }
+
+    pub async fn update(&self) {
+        let instances = self.instances.read().await;
+        for (_, instance) in &*instances { // TODO: Parallelise
+            instance.write().await.update().await;
+        }
+        self.cleanup().await;
+    }
+
+    async fn cleanup(&self) {
+        let mut instances = self.instances.write().await;
+        // Clean up instances that have no sessions.
+        let mut remove = Vec::new();
+        for (plot_id, instance) in &*instances {
+            if (instance.read().await.sessions.is_empty()) { // TODO: Parallelise
+                remove.push(*plot_id);
+            }
+        }
+        for plot_id in remove {
+            debug!("Closed editor instance on plot {}.", plot_id);
+            instances.remove(&plot_id);
+        }
     }
 
 }
@@ -57,7 +83,12 @@ impl EditorInstance {
         sessions : Vec::new()
     } }
 
-    pub async fn kill_and_create_session<const SESSION_CODE_LEN : usize>(&mut self, client_uuid : Uuid, client_name : String) -> (RwLockWriteGuard<EditorSession>, String) {
+    pub async fn kill_and_create_session<const SESSION_CODE_LEN : usize>(
+        &mut self,
+        client_uuid : Uuid,
+        client_name : String,
+        timeout_in  : Duration
+    ) -> (RwLockWriteGuard<EditorSession>, String) {
         // Kill previous sessions under the same client_uuid.
         let mut remove = Vec::new();
         for (i, session) in self.sessions.iter().enumerate().rev() {
@@ -69,11 +100,13 @@ impl EditorInstance {
                     EditorSessionMode::Active(active) => {
                         let _ = active.send(DisconnectS2CPacket { reason : "Logged in from another location".into()  }).await;
                     },
+                    EditorSessionMode::Closed => { }
                 }
                 remove.push(i);
             }
         }
         for i in remove {
+            debug!("Closed editor session for {} on plot {}.", client_uuid, self.state.plot_id);
             self.sessions.remove(i);
         }
         // Generate a session code.
@@ -82,12 +115,12 @@ impl EditorInstance {
         let session_code = bytes.map(|byte| Self::rand_byte_to_char(byte)).into_iter().collect::<String>();
         // Add the new session.
         self.sessions.push(RwLock::new(EditorSession {
+            session_code : session_code.clone(),
             client_uuid,
             client_name,
-            mode        : EditorSessionMode::Pending(PendingEditorSession {
-                session_code : session_code.clone()
-            }),
+            mode         : EditorSessionMode::Pending(PendingEditorSession::new(timeout_in)),
         }));
+        debug!("Opened editor session for {} on plot {}.", client_uuid, self.state.plot_id);
         // Return
         (self.sessions.last().unwrap().write().await, session_code)
     }
@@ -108,54 +141,25 @@ impl EditorInstance {
         ascii as char
     }
 
+
+    async fn update(&mut self) {
+        for session in &self.sessions { // TODO: Parallelise
+            if let Err(err) = session.write().await.update().await {
+                voxidian_logger::warn!("{}", err);
+                // TODO: Handle error and kick
+            };
+        }
+        self.cleanup().await;
+    }
+
+    async fn cleanup(&mut self) {
+        // TODO
+    }
+
 }
 
 
 pub struct EditorState {
     db      : Arc<VoxidianDB>,
     plot_id : DBPlotID,
-}
-
-
-pub struct EditorSession {
-    client_uuid : Uuid,
-    client_name : String,
-    mode        : EditorSessionMode
-}
-impl EditorSession {
-
-    pub(super) fn activate(&mut self, socket : ws::WebSocket) {
-        let EditorSessionMode::Pending(_) = self.mode else { panic!("`EditorSession::activate` called when non-pending") };
-        self.mode = EditorSessionMode::Active(ActiveEditorSession::new(socket));
-    }
-
-}
-
-
-pub enum EditorSessionMode {
-    Pending(PendingEditorSession),
-    Active(ActiveEditorSession)
-}
-
-
-pub struct PendingEditorSession {
-    session_code : String
-}
-
-
-pub struct ActiveEditorSession {
-    socket         : ws::WebSocket,
-    just_logged_in : bool
-}
-impl ActiveEditorSession {
-
-    fn new(socket : ws::WebSocket) -> Self { Self {
-        socket,
-        just_logged_in : true
-    } }
-
-    async fn send(&mut self, packet : impl PrefixedPacketEncode) -> Result<(), axum::Error> {
-        self.socket.send(ws::Message::Binary(packet::encode(packet).into())).await
-    }
-
 }
