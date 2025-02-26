@@ -39,7 +39,7 @@ pub fn send_patches_to_server() {
 }
 
 
-pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) { // TODO: Fix selection shifting.
+pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
