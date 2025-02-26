@@ -1,5 +1,6 @@
 use crate::code::monaco::{ self, Editor, EditorDecoration, EditorDecorationOptions, EditorSelection, EditorHoverMessage, EditorPosition };
 use voxidian_editor_common::packet::c2s::SelectionRange;
+use voxidian_editor_common::Uuid;
 use std::sync::atomic::AtomicBool;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
 use std::cell::LazyCell;
@@ -15,9 +16,10 @@ pub fn init_css() {
     let     style = document.create_element("style").unwrap();
     let mut inner = String::new();
 
-    for hue in 0..360 {
-        inner += &format!(".editor_code_remote_selection_{}_single {{ background: hsl({},100%,62.5%); opacity: 0.875; min-width: 2px; }}", hue, hue);
-        inner += &format!(".editor_code_remote_selection_{}_range {{ background: hsl({},100%,62.5%); opacity: 0.5; min-width: 2px; }}", hue, hue);
+    for i in 0..180 {
+        let hue = i * 2;
+        inner += &format!(".editor_code_remote_selection_{}_single {{ background: hsl({},100%,62.5%); opacity: 0.875; min-width: 2px; }}", i, hue);
+        inner += &format!(".editor_code_remote_selection_{}_range {{ background: hsl({},100%,62.5%); opacity: 0.5; min-width: 2px; }}", i, hue);
     }
 
     style.set_inner_html(&inner);
@@ -30,14 +32,14 @@ pub(super) static SELECTION_CHANGED : AtomicBool = AtomicBool::new(false);
 
 pub(crate) static REMOTE_SELECTIONS : RemoteSelectionsContainer = RemoteSelectionsContainer::new();
 pub(crate) struct RemoteSelectionsContainer {
-    selections           : LazyCell<RwLock<HashMap<u64, RemoteSelection>>>,
+    selections           : LazyCell<RwLock<HashMap<Uuid, RemoteSelection>>>,
     old_decorations      : Mutex<Option<Vec<String>>>,
     old_filetree_markers : Mutex<Vec<Element>>
 }
 #[derive(Debug)]
 pub(crate) struct RemoteSelection {
     pub client_name : String,
-    pub colour      : u16,
+    pub colour      : u8,
     pub file_id     : u64,
     pub selections  : Vec<SelectionRange>
 }
@@ -47,10 +49,10 @@ impl RemoteSelectionsContainer { const fn new() -> Self { Self {
     old_filetree_markers : Mutex::new(Vec::new())
 } } }
 impl RemoteSelectionsContainer {
-    pub(crate) fn read(&self) -> RwLockReadGuard<HashMap<u64, RemoteSelection>> {
+    pub(crate) fn read(&self) -> RwLockReadGuard<HashMap<Uuid, RemoteSelection>> {
         self.selections.read().unwrap()
     }
-    pub(crate) fn write(&self) -> RwLockWriteGuard<HashMap<u64, RemoteSelection>> {
+    pub(crate) fn write(&self) -> RwLockWriteGuard<HashMap<Uuid, RemoteSelection>> {
         self.selections.write().unwrap()
     }
 }

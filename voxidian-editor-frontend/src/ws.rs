@@ -206,14 +206,14 @@ fn on_ws_message(e : MessageEvent) {
 
         S2CPackets::Selections(selections_event) => {
             if let Some((file_id, selections)) = selections_event.selections {
-                crate::code::remote_cursors::REMOTE_SELECTIONS.write().insert(selections_event.client_id, RemoteSelection {
+                crate::code::remote_cursors::REMOTE_SELECTIONS.write().insert(selections_event.client_uuid, RemoteSelection {
                     client_name : selections_event.client_name.into_owned(),
                     colour      : selections_event.colour,
                     file_id,
                     selections,
                 });
             } else {
-                crate::code::remote_cursors::REMOTE_SELECTIONS.write().remove(&selections_event.client_id);
+                crate::code::remote_cursors::REMOTE_SELECTIONS.write().remove(&selections_event.client_uuid);
             }
             crate::code::remote_cursors::update();
         },

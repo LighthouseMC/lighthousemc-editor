@@ -1,5 +1,5 @@
 use crate::peer::OutgoingPeerCommand;
-use crate::instances::EditorInstance;
+use crate::instances::{ EditorInstance, EditorInstanceEvent };
 use crate::util::Dirty;
 use super::{ EditorSession, EditorSessionStep };
 use voxidian_editor_common::packet::s2c::*;
@@ -39,6 +39,11 @@ impl EditorSessionState {
         selections   : Dirty::new_clean(None)
     } }
 
+    pub fn selections(&self) -> &Option<(DBFSFileID, Vec<SelectionRange>)> {
+        &*self.selections
+    }
+
+
     pub(super) fn open_file(&mut self, file_id : DBFSFileID) {
         match (self.file_shadows.get_mut(&file_id)) {
             None => { self.file_shadows.insert(file_id, FileShadow {
@@ -68,12 +73,12 @@ impl EditorSessionState {
 
 
 pub(crate) async fn update_state(
-        instances : Entities<(&EditorInstance)>,
+    mut instances : Entities<(&mut EditorInstance)>,
     mut sessions  : Entities<(&mut EditorSession)>
 ) {
     for session in &mut sessions {
-        if let EditorSessionStep::Active { state, outgoing_commands_tx, .. } = &mut session.session_step {
-            let Some(instance) = instances.iter().find(|instance| instance.plot_id == session.plot_id) else { continue; };
+        if let EditorSessionStep::Active { outgoing_commands_tx, state, .. } = &mut session.session_step {
+            let Some(instance) = instances.iter_mut().find(|instance| instance.plot_id == session.plot_id) else { continue; };
 
             // File shadows.
             {
@@ -103,7 +108,12 @@ pub(crate) async fn update_state(
 
             // Selections.
             if (Dirty::take_dirty(&mut state.selections)) {
-                // TODO
+                instance.events.push_back(EditorInstanceEvent::UpdateSelections { packet : SelectionsS2CPacket {
+                    client_uuid : session.client_uuid,
+                    client_name : session.client_name.clone().into(),
+                    colour      : (session.client_uuid.as_u128() % 180) as u8,
+                    selections  : (*state.selections).clone()
+                } });
             }
 
         }

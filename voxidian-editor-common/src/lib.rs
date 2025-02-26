@@ -8,3 +8,4 @@
 pub mod packet;
 
 pub use diff_match_patch_rs as dmp;
+pub use uuid::Uuid;

@@ -1,4 +1,6 @@
 use crate::peer::{ OutgoingPeerCommand, IncomingPeerEvent };
+use super::{ EditorInstance, EditorInstanceEvent };
+use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::*;
 use voxidian_database::DBPlotID;
 use voxidian_logger::debug;
@@ -23,7 +25,7 @@ pub struct EditorSession {
     session_code : String,
     session_step : EditorSessionStep,
 
-    closed       : bool
+    closed       : u8
 }
 
 pub(crate) enum EditorSessionStep {
@@ -59,7 +61,7 @@ impl EditorSession {
             session_step : EditorSessionStep::Pending {
                 expires_at : Instant::now() + expires_in
             },
-            closed       : false
+            closed       : 0
         })
     }
 
@@ -82,6 +84,13 @@ impl EditorSession {
 
     pub fn plot_id(&self) -> DBPlotID {
         self.plot_id
+    }
+
+    pub fn client_uuid(&self) -> Uuid {
+        self.client_uuid
+    }
+    pub fn client_name(&self) -> &str {
+        &self.client_name
     }
 
     pub fn session_code(&self) -> &str {
@@ -110,8 +119,8 @@ impl EditorSession {
 
 
     pub fn close(&mut self) {
-        if (! self.closed) {
-            self.closed = true;
+        if (self.closed == 0) {
+            self.closed = 1;
             if let EditorSessionStep::Active { outgoing_commands_tx, .. } = &mut self.session_step {
                 let _ = outgoing_commands_tx.send(OutgoingPeerCommand::Close);
             }
@@ -124,8 +133,9 @@ impl EditorSession {
 
 
 pub(crate) async fn read_session_events(
-        cmds     : Commands,
-    mut sessions : Entities<(Entity, &mut EditorSession)>
+        cmds      : Commands,
+    mut instances : Entities<(&mut EditorInstance)>,
+    mut sessions  : Entities<(Entity, &mut EditorSession)>
 ) {
     for (entity, session) in &mut sessions {
         match (&mut session.session_step) {
@@ -169,7 +179,19 @@ pub(crate) async fn read_session_events(
             }
 
         }
-        if (session.closed) {
+        if (session.closed == 1) {
+            session.closed = 2;
+
+            for instance in &mut instances { if (instance.plot_id == session.plot_id) {
+                // Clear selections.
+                instance.events.push_back(EditorInstanceEvent::UpdateSelections { packet : SelectionsS2CPacket {
+                    client_uuid : session.client_uuid,
+                    client_name : "".into(),
+                    colour      : 0,
+                    selections  : None
+                } });
+            } }
+
             cmds.despawn(entity).await;
         }
     }

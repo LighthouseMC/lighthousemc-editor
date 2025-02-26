@@ -1,12 +1,13 @@
 use super::*;
 use super::c2s::SelectionRange;
+use uuid::Uuid;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SelectionsS2CPacket<'l> {
-    pub client_id   : u64,
+    pub client_uuid : Uuid,
     pub client_name : Cow<'l, str>,
-    pub colour      : u16,
+    pub colour      : u8,
     pub selections  : Option<(u64, Vec<SelectionRange>)>
 }
 
@@ -16,7 +17,7 @@ impl<'l> PacketMeta for SelectionsS2CPacket<'l> {
 
 impl<'l> PacketEncode for SelectionsS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
-        buf.encode_write(self.client_id);
+        buf.encode_write(self.client_uuid);
         buf.encode_write(&self.client_name);
         buf.encode_write(self.colour);
         if let Some((file_id, selections)) = &self.selections {
@@ -36,7 +37,7 @@ impl<'l> PacketEncode for SelectionsS2CPacket<'l> {
 impl<'l> PacketDecode for SelectionsS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
-            client_id   : buf.read_decode()?,
+            client_uuid : buf.read_decode()?,
             client_name : buf.read_decode()?,
             colour      : buf.read_decode()?,
             selections  : if (buf.read_decode::<bool>()?){

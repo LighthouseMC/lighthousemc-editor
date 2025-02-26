@@ -50,6 +50,7 @@ impl Plugin for EditorPlugin {
 
         app.add_systems(Startup, run_webserver.pass((self.bind_addrs, self.display_game_addr)));
 
+        app.add_systems(Cycle, instances::read_instance_events);
         app.add_systems(Cycle, instances::session::read_session_events);
         app.add_systems(Cycle, instances::session::update_state);
 
