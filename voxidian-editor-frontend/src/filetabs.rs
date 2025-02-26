@@ -3,7 +3,7 @@ use voxidian_editor_common::packet::s2c::FileContents;
 use wasm_bindgen::prelude::*;
 
 
-pub fn open_file(id : u64, path : String) {
+pub fn open_file(file_id : u64, path : String) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -18,19 +18,19 @@ pub fn open_file(id : u64, path : String) {
             before = tab.next_sibling();
             tab.remove_attribute("id").unwrap();
         }
-        let other_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
-        if (other_id == id) {
+        let other_file_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
+        if (other_file_id == file_id) {
             found = Some(tab);
         }
     }
     found.unwrap_or_else(|| {
         let div = document.create_element("div").unwrap();
-        div.set_attribute("editor_filetab_file_id", &id.to_string()).unwrap();
+        div.set_attribute("editor_filetab_file_id", &file_id.to_string()).unwrap();
         div.set_attribute("editor_filetab_file_path", &path).unwrap();
 
         let filename = path.split("/").last().unwrap();
         let path1 = path.clone();
-        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, path1.clone(), true); });
+        let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(file_id, path1.clone(), true); });
 
         let icon = document.create_element("div").unwrap();
         icon.class_list().toggle_with_force("editor_filetab_icon", true).unwrap();
@@ -52,7 +52,7 @@ pub fn open_file(id : u64, path : String) {
         close.set_inner_html("×");
         div.append_child(&close).unwrap();
         let path1 = path.clone();
-        let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(id, path1.clone()));
+        let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(file_id, path1.clone()));
         close.add_event_listener_with_callback("click", close_callback.as_ref().unchecked_ref()).unwrap();
         close_callback.forget();
 
@@ -65,7 +65,7 @@ pub fn open_file(id : u64, path : String) {
 }
 
 
-pub fn close(id : u64) {
+pub fn close(file_id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -75,9 +75,9 @@ pub fn close(id : u64) {
     let mut found    = None;
     for i in 0..children.length() {
         let tab = children.get_with_index(i).unwrap();
-        let other_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
-        if (id == other_id) {
-            crate::code::destroy_monaco(id);
+        let other_file_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
+        if (file_id == other_file_id) {
+            crate::code::destroy_monaco(file_id);
             if (tab.id() == "editor_filetab_selected") {
                 tab.remove_attribute("id").unwrap();
                 found = Some(i.saturating_sub(1));
@@ -91,10 +91,10 @@ pub fn close(id : u64) {
             tab.set_id("editor_filetab_selected");
             let path = tab.get_attribute("editor_filetab_file_path").unwrap();
             set_filepath(&path);
-            crate::filetree::open_file(id);
-            if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read().get(&id) {
+            crate::filetree::open_file(file_id);
+            if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read().get(&file_id) {
                 match (is_open) {
-                    Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(id); },
+                    Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(file_id); },
                     Some(Some(FilesEntryContents::NonText)) => { crate::code::open_nontext(); },
                     Some(None) => { crate::code::open_load(); },
                     None => { crate::code::open_noopen(); }
@@ -103,7 +103,7 @@ pub fn close(id : u64) {
         },
         Some(None) => {
             clear_filepath();
-            crate::filetree::close_file(id);
+            crate::filetree::close_file(file_id);
             crate::code::open_noopen();
         },
         None => { }
@@ -134,7 +134,7 @@ fn set_filepath(path : &str) {
 }
 
 
-pub fn overwrite(id : u64, fsname : &str, contents : &FileContents) {
+pub fn overwrite(file_id : u64, fsname : &str, contents : &FileContents) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
@@ -143,17 +143,17 @@ pub fn overwrite(id : u64, fsname : &str, contents : &FileContents) {
     let children = filetabs.children();
     for i in 0..children.length() {
         let tab = children.get_with_index(i).unwrap();
-        let other_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
-        if (id == other_id) {
+        let other_file_id = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
+        if (file_id == other_file_id) {
             if (tab.id() == "editor_filetab_selected") {
                 match (contents) {
                     FileContents::NonText => { crate::code::open_nontext(); },
-                    FileContents::Text(text) => { crate::code::create_monaco(id, fsname, text, true) },
+                    FileContents::Text(text) => { crate::code::create_monaco(file_id, fsname, text, true) },
                 }
             } else {
                 match (contents) {
                     FileContents::NonText => { },
-                    FileContents::Text(text) => { crate::code::create_monaco(id, fsname, text, false) },
+                    FileContents::Text(text) => { crate::code::create_monaco(file_id, fsname, text, false) },
                 }
             }
             break;

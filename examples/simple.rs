@@ -10,6 +10,7 @@ use axecs::prelude::*;
 use std::sync::Arc;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::Duration;
 use std::thread;
 use uuid::Uuid;
 
@@ -26,8 +27,8 @@ async fn main() {
     app.add_plugin(CycleSchedulerPlugin);
     app.add_plugin(CtrlCPlugin::default());
     app.add_plugin(EditorPlugin::new(
-        "127.0.0.1:5123".to_string(),
-        "127.0.0.1:25565".to_string(),
+        "127.0.0.1:5123",
+        "127.0.0.1:25565".into(),
         Arc::clone(&db)
     ).await.unwrap());
 
@@ -49,7 +50,8 @@ async fn create_session_and_instance(
     let session = unsafe{ EditorSession::create::<192>(
         plot_id,
         Uuid::new_v4(),
-        "Totobirb".into()
+        "Totobirb".into(),
+        Duration::from_secs(60)
     ) }.unwrap();
     voxidian_logger::pass!("http://127.0.0.1:5123/editor#{}", session.session_code());
     cmds.spawn(session).await;

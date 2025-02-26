@@ -3,6 +3,7 @@ use crate::code::diffsync;
 use std::cell::LazyCell;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Arc, Mutex };
 use std::collections::HashMap;
+use std::borrow::Cow;
 use wasm_bindgen::prelude::*;
 use web_sys::Element;
 use js_sys::Array;
@@ -111,73 +112,73 @@ mod js { use super::*;
 pub use js::Editor;
 
 
-#[derive(Ser, Deser)]
-struct MonacoConfig {
-    paths : MonacoConfigPaths
+#[derive(Ser)]
+struct MonacoConfig<'l> {
+    paths : MonacoConfigPaths<'l>
 }
 #[derive(Ser, Deser)]
-struct MonacoConfigPaths {
-    vs : String
+struct MonacoConfigPaths<'l> {
+    vs : Cow<'l, str>
 }
 
 #[derive(Ser, Deser)]
-struct EditorTheme {
-    base    : String,
+struct EditorTheme<'l> {
+    base    : Cow<'l, str>,
     inherit : bool,
     #[serde(rename = "colors")]
-    colours : EditorThemeColours,
-    rules   : Vec<EditorThemeRule>
+    colours : EditorThemeColours<'l>,
+    rules   : Cow<'l, [EditorThemeRule<'l>]>
 }
 #[derive(Ser, Deser)]
-struct EditorThemeColours {
+struct EditorThemeColours<'l> {
     #[serde(rename = "editor.lineHighlightBorder")]
-    line_highlight_border           : String,
+    line_highlight_border           : Cow<'l, str>,
     #[serde(rename = "editor.selectionBackground")]
-    selection_background            : String,
+    selection_background            : Cow<'l, str>,
     #[serde(rename = "editor.findMatchBackground")]
-    find_match_background           : String,
+    find_match_background           : Cow<'l, str>,
     #[serde(rename = "editor.findMatchHighlightBackground")]
-    find_match_highlight_background : String,
+    find_match_highlight_background : Cow<'l, str>,
     #[serde(rename = "focusBorder")]
-    focus_border                    : String,
+    focus_border                    : Cow<'l, str>,
     #[serde(rename = "contrastBorder")]
-    contrast_border                 : String
+    contrast_border                 : Cow<'l, str>
 }
-#[derive(Ser, Deser)]
-struct EditorThemeRule {
-    token : String
+#[derive(Ser, Deser, Clone)]
+struct EditorThemeRule<'l> {
+    token : Cow<'l, str>
 }
 
 #[derive(Ser, Deser)]
-struct EditorConfig {
-    value                     : String,
-    language                  : String,
-    theme                     : String,
+struct EditorConfig<'l> {
+    value                     : Cow<'l, str>,
+    language                  : Cow<'l, str>,
+    theme                     : Cow<'l, str>,
     #[serde(rename = "autoDetectHighContrast")]
     auto_detect_high_contrast : bool,
     #[serde(rename = "automaticLayout")]
     automatic_layout          : bool,
     #[serde(rename = "cursorBlinking")]
-    cursor_blinking           : String,
+    cursor_blinking           : Cow<'l, str>,
     #[serde(rename = "fontFamily")]
-    font_family               : String,
+    font_family               : Cow<'l, str>,
     #[serde(rename = "fontLigatures")]
     font_ligatures            : bool,
     #[serde(rename = "fontSize")]
     font_size                 : f32,
     #[serde(rename = "fontWeight")]
-    font_weight               : String,
-    minimap                   : EditorConfigMinimap,
+    font_weight               : Cow<'l, str>,
+    minimap                   : EditorConfigMinimap<'l>,
     #[serde(rename = "renderFinalNewline")]
-    render_final_newline      : String,
+    render_final_newline      : Cow<'l, str>,
     #[serde(rename = "smoothScrolling")]
     smooth_scrolling          : bool
 }
 #[derive(Ser, Deser)]
-struct EditorConfigMinimap {
+struct EditorConfigMinimap<'l> {
     #[serde(rename = "showSlider")]
-    show_slider : String,
-    size        : String
+    show_slider : Cow<'l, str>,
+    size        : Cow<'l, str>
 }
 
 #[derive(Ser, Deser, Debug)]
@@ -210,23 +211,23 @@ pub struct EditorPosition {
 }
 
 #[derive(Ser, Deser, Debug)]
-pub struct EditorDecoration {
-    pub options : EditorDecorationOptions,
+pub struct EditorDecoration<'l> {
+    pub options : EditorDecorationOptions<'l>,
     pub range   : EditorSelection
 }
 #[derive(Ser, Deser, Debug)]
-pub struct EditorDecorationOptions {
+pub struct EditorDecorationOptions<'l> {
     #[serde(rename = "className")]
-    pub class_name    : String,
+    pub class_name    : Cow<'l, str>,
     #[serde(rename = "hoverMessage")]
-    pub hover_message : EditorHoverMessage,
+    pub hover_message : EditorHoverMessage<'l>,
     #[serde(rename = "isWholeLine")]
     pub is_whole_line : bool,
     pub stickiness    : u8
 }
 #[derive(Ser, Deser, Debug)]
-pub struct EditorHoverMessage {
-    pub value : String
+pub struct EditorHoverMessage<'l> {
+    pub value : Cow<'l, str>
 }
 
 #[derive(Ser, Deser, Debug)]
@@ -244,17 +245,17 @@ pub fn init_theme() {
     require(move || {
 
         js::define_theme("voxidian", &serde_wasm_bindgen::to_value(&EditorTheme {
-            base    : "hc-black".to_string(),
+            base    : "hc-black".into(),
             inherit : true,
             colours : EditorThemeColours {
-                line_highlight_border           : "#007f00".to_string(),
-                selection_background            : "#007f00".to_string(),
-                find_match_background           : "#007f00".to_string(),
-                find_match_highlight_background : "#007f00".to_string(),
-                focus_border                    : "#00000000".to_string(),
-                contrast_border                 : "#3f3f3f".to_string(),
+                line_highlight_border           : "#007f00".into(),
+                selection_background            : "#007f00".into(),
+                find_match_background           : "#007f00".into(),
+                find_match_highlight_background : "#007f00".into(),
+                focus_border                    : "#00000000".into(),
+                contrast_border                 : "#3f3f3f".into(),
             },
-            rules   : Vec::new()
+            rules   : (&[]).into()
         }).unwrap());
 
     });
@@ -281,21 +282,21 @@ pub fn create(file_id : u64, file_name : &str, initial_script : String, open : b
         }
 
         let config = EditorConfig {
-            value                     : initial_script.clone(),
-            language                  : initial_language.to_string(),
-            theme                     : "voxidian".to_string(),
+            value                     : (&initial_script).into(),
+            language                  : initial_language.into(),
+            theme                     : "voxidian".into(),
             auto_detect_high_contrast : false,
             automatic_layout          : true,
-            cursor_blinking           : "smooth".to_string(),
-            font_family               : "Fira Code".to_string(),
+            cursor_blinking           : "smooth".into(),
+            font_family               : "Fira Code".into(),
             font_ligatures            : true,
             font_size                 : 13.0,
-            font_weight               : "350".to_string(),
+            font_weight               : "350".into(),
             minimap                   : EditorConfigMinimap {
-                show_slider : "always".to_string(),
-                size        : "proportional".to_string()
+                show_slider : "always".into(),
+                size        : "proportional".into()
             },
-            render_final_newline      : "dimmed".to_string(),
+            render_final_newline      : "dimmed".into(),
             smooth_scrolling          : true
         };
         let editor = js::editor_create(&code, &serde_wasm_bindgen::to_value(&config).unwrap());
@@ -347,36 +348,34 @@ pub fn create(file_id : u64, file_name : &str, initial_script : String, open : b
 }
 
 
-pub fn open(id : u64) {
+pub fn open(file_id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
     let containers = document.get_elements_by_class_name("editor_code_container");
-    let id = id.to_string();
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
-        if (container.get_attribute("editor_code_file_id").unwrap() == id) {
+        if (container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap() == file_id) {
             container.class_list().toggle_with_force("editor_right_main_selected", true).unwrap();
         }
     }
 }
 
 
-pub fn destroy(id : u64) {
+pub fn destroy(file_id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 
     let containers = document.get_elements_by_class_name("editor_code_container");
-    let id_string = id.to_string();
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
-        if (container.get_attribute("editor_code_file_id").unwrap() == id_string) {
+        if (container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap() == file_id) {
             document.get_element_by_id("editor_right_main_container").unwrap().remove_child(&container).unwrap();
             break;
         }
     }
 
-    EDITORS.write().remove(&id);
+    EDITORS.write().remove(&file_id);
 }
 
 
@@ -396,7 +395,7 @@ pub fn currently_focused() -> Option<u64> {
 
 
 fn require<F : Fn() -> () + 'static>(f : F) {
-    let config = MonacoConfig { paths : MonacoConfigPaths { vs : "https://unpkg.com/monaco-editor@latest/min/vs".to_string() } };
+    let config = MonacoConfig { paths : MonacoConfigPaths { vs : "https://unpkg.com/monaco-editor@latest/min/vs".into() } };
     js::config(&serde_wasm_bindgen::to_value(&config).unwrap());
 
     let from = Array::new();

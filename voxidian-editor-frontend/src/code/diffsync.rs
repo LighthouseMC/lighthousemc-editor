@@ -15,11 +15,11 @@ pub fn send_patches_to_server() {
     let containers = document.get_elements_by_class_name("editor_code_container");
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
-        let id = container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap();
+        let file_id = container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap();
 
         let mut files = crate::state::FILES.write();
-        let Some(Some(FilesEntryContents::Text(client_shadow))) = &mut files.get_mut(&id).unwrap().is_open else { continue };
-        let client_text = monaco::EDITORS.read()[&id].get_model().get_value(1);
+        let Some(Some(FilesEntryContents::Text(client_shadow))) = &mut files.get_mut(&file_id).unwrap().is_open else { continue };
+        let client_text = monaco::EDITORS.read()[&file_id].get_model().get_value(1);
 
         if (client_shadow != &client_text) {
             let dmp = DiffMatchPatch::new();
@@ -31,7 +31,7 @@ pub fn send_patches_to_server() {
             *client_shadow = client_text;
             // The edits are sent to the Server.
             crate::ws::WS.send(PatchFileC2SPacket {
-                id,
+                file_id,
                 patches
             });
         }
@@ -44,10 +44,9 @@ pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) {
     let document = window.document().unwrap();
 
     let containers = document.get_elements_by_class_name("editor_code_container");
-    let id_string = file_id.to_string();
     for i in 0..containers.length() {
         let container = containers.get_with_index(i).unwrap();
-        if (container.get_attribute("editor_code_file_id").unwrap() == id_string) {
+        if (container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap() == file_id) {
             let client_editor   = &monaco::EDITORS.read()[&file_id];
             let client_model    = client_editor.get_model();
             let old_client_text = client_model.get_value(1);

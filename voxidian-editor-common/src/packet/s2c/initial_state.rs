@@ -18,7 +18,7 @@ impl<'l> PacketEncode for InitialStateS2CPacket<'l> {
         buf.encode_write(&self.plot_owner_name);
         buf.encode_write(&(self.tree_entries.len() as u32));
         for file in &*self.tree_entries {
-            buf.encode_write(file.id);
+            buf.encode_write(file.entry_id);
             buf.encode_write(file.is_dir);
             buf.encode_write(&file.parent_dir);
             buf.encode_write(&file.fsname);
@@ -36,7 +36,7 @@ impl<'l> PacketDecode for InitialStateS2CPacket<'l> {
                 let mut files = Vec::with_capacity(count);
                 for _ in 0..count {
                     files.push(FileTreeEntry {
-                        id         : buf.read_decode::<u64>()?,
+                        entry_id   : buf.read_decode::<u64>()?,
                         is_dir     : buf.read_decode::<bool>()?,
                         parent_dir : buf.read_decode::<Option<u64>>()?,
                         fsname     : buf.read_decode::<String>()?
@@ -51,7 +51,8 @@ impl<'l> PacketDecode for InitialStateS2CPacket<'l> {
 
 #[derive(Debug, Clone)]
 pub struct FileTreeEntry {
-    pub id         : u64,
+    /// Whether this is a directory or file id depends on `is_dir`.
+    pub entry_id   : u64,
     pub is_dir     : bool,
     pub parent_dir : Option<u64>,
     pub fsname     : String

@@ -3,7 +3,6 @@ use crate::instances::session::{ EditorSession, EditorSessionStep };
 use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::*;
 use axecs::prelude::*;
-use tokio::sync::mpsc;
 use axum::extract::ws::WebSocket;
 
 
@@ -20,23 +19,15 @@ pub enum IncomingPeerEvent {
 }
 
 
-#[derive(Component)]
-pub struct EditorPeer<'l> {
-    outgoing_commands_tx : mpsc::UnboundedSender<OutgoingPeerCommand<'l>>,
-    incoming_events_rx   : mpsc::UnboundedReceiver<IncomingPeerEvent>
-}
-
-
 pub(super) async fn handle_editor_websocket(cmds : Commands, mut socket : WebSocket) {
     let Ok(handshake) = comms::read_packet::<HandshakeC2SPacket>(&mut socket).await else { return; };
     let mut socket = Some(socket);
-    cmds.run_system_mut(async move |cmds, instances, sessions| {
-        try_login_editor_websocket(cmds, socket.take().unwrap(), &handshake, instances, sessions).await;
+    cmds.run_system_mut(async move |instances, sessions| {
+        try_login_editor_websocket(socket.take().unwrap(), &handshake, instances, sessions).await;
     }).await;
 }
 
 async fn try_login_editor_websocket(
-        cmds      : Commands,
     mut socket    : WebSocket,
         handshake : &HandshakeC2SPacket<'_>,
         instances : Entities<(&EditorInstance)>,
@@ -44,7 +35,7 @@ async fn try_login_editor_websocket(
 ) {
     // Find the relevant session.
     for (session) in &mut sessions {
-        if let EditorSessionStep::Pending = session.session_step() {
+        if let EditorSessionStep::Pending { .. } = session.session_step() {
             if (&*handshake.session_code == session.session_code()) {
                 // Find the relevant instance.
                 for instance in &instances {

@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct CloseFileC2SPacket {
-    pub id : u64
+    pub file_id : u64
 }
 
 impl PacketMeta for CloseFileC2SPacket {
@@ -12,14 +12,14 @@ impl PacketMeta for CloseFileC2SPacket {
 
 impl PacketEncode for CloseFileC2SPacket {
     fn encode(&self, buf : &mut PacketBuf) -> () {
-        buf.encode_write(&self.id);
+        buf.encode_write(&self.file_id);
     }
 }
 
 impl PacketDecode for CloseFileC2SPacket {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
-            id : buf.read_decode()?
+            file_id : buf.read_decode()?
         })
     }
 }

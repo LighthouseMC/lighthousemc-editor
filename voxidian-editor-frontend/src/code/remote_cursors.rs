@@ -108,8 +108,8 @@ pub(crate) fn update_known(file_id : u64, editor : &Editor) {
                 let end   = serde_wasm_bindgen::from_value::<EditorPosition>(model.get_position_at(selection.end   )).unwrap();
                 new_decorations.push(serde_wasm_bindgen::to_value(&EditorDecoration {
                     options : EditorDecorationOptions {
-                        class_name    : format!("editor_code_remote_selection_{}_{}", remote_selection.colour, if (selection.start == selection.end) { "single" } else { "range" }),
-                        hover_message : EditorHoverMessage { value : remote_selection.client_name.clone() },
+                        class_name    : format!("editor_code_remote_selection_{}_{}", remote_selection.colour, if (selection.start == selection.end) { "single" } else { "range" }).into(),
+                        hover_message : EditorHoverMessage { value : (&remote_selection.client_name).into() },
                         is_whole_line : false,
                         stickiness    : 1
                     },

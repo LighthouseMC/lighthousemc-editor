@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub struct OverwriteFileS2CPacket<'l> {
-    pub id       : u64,
+    pub file_id  : u64,
     pub contents : FileContents<'l>
 }
 
@@ -13,7 +13,7 @@ impl<'l> PacketMeta for OverwriteFileS2CPacket<'l> {
 
 impl<'l> PacketEncode for OverwriteFileS2CPacket<'l> {
     fn encode(&self, buf : &mut PacketBuf) -> () {
-        buf.encode_write(self.id);
+        buf.encode_write(self.file_id);
         match (&self.contents) {
             FileContents::NonText    => buf.encode_write(false),
             FileContents::Text(text) => {
@@ -27,7 +27,7 @@ impl<'l> PacketEncode for OverwriteFileS2CPacket<'l> {
 impl<'l> PacketDecode for OverwriteFileS2CPacket<'l> {
     fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
         Ok(Self {
-            id       : buf.read_decode()?,
+            file_id  : buf.read_decode()?,
             contents : {
                 let is_text = buf.read_decode::<bool>()?;
                 if (is_text) { FileContents::Text(buf.read_decode()?) }

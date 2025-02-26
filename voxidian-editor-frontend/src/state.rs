@@ -28,7 +28,7 @@ static FILE_HISTORY : Mutex<VecDeque<(u64, String)>> = Mutex::new(VecDeque::new(
 
 #[derive(Debug)]
 pub struct FilesEntry {
-    pub id      : u64,
+    pub file_id : u64,
     pub fsname  : String,
     pub is_open : Option<Option<FilesEntryContents>>
     //            |      |      ^- File data
@@ -44,8 +44,8 @@ pub enum FilesEntryContents {
 
 pub fn add_tree_entry(entry : FileTreeEntry) {
     if (! entry.is_dir) {
-        FILES.write().insert(entry.id, FilesEntry {
-            id      : entry.id,
+        FILES.write().insert(entry.entry_id, FilesEntry {
+            file_id : entry.entry_id,
             fsname  : entry.fsname.clone(),
             is_open : None
         });
@@ -53,33 +53,33 @@ pub fn add_tree_entry(entry : FileTreeEntry) {
     crate::filetree::add(entry);
 }
 
-pub fn open_file(id : u64, path : String, remove_history : bool) -> bool {
+pub fn open_file(file_id : u64, path : String, remove_history : bool) -> bool {
     if (remove_history) {
-        FILE_HISTORY.lock().unwrap().retain(|(file, _)| *file != id);
+        FILE_HISTORY.lock().unwrap().retain(|(file, _)| *file != file_id);
     }
     let mut files = FILES.write();
-    let Some(FilesEntry { is_open, .. }) = files.get_mut(&id) else { return false; };
+    let Some(FilesEntry { is_open, .. }) = files.get_mut(&file_id) else { return false; };
     crate::code::remote_cursors::update();
     let mut should_proper_update_cursor = true;
     match (is_open) {
         Some(Some(FilesEntryContents::NonText)) => { crate::code::open_nontext(); },
-        Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(id); },
+        Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(file_id); },
         Some(None) => { crate::code::open_load(); },
         None => {
             *is_open = Some(None);
-            crate::ws::WS.send(OpenFileC2SPacket { id });
+            crate::ws::WS.send(OpenFileC2SPacket { file_id });
             crate::code::open_load();
             should_proper_update_cursor = false;
         }
     }
-    crate::filetree::open_file(id);
-    crate::filetabs::open_file(id, path);
+    crate::filetree::open_file(file_id);
+    crate::filetabs::open_file(file_id, path);
     if (should_proper_update_cursor) {
         crate::code::selection_changed();
     } else {
         crate::code::selection_unchanged();
         crate::ws::WS.send(SelectionsC2SPacket {
-            selections : Some((id, vec![ SelectionRange {
+            selections : Some((file_id, vec![ SelectionRange {
                 start : 0,
                 end   : 0
             } ]))
@@ -88,17 +88,17 @@ pub fn open_file(id : u64, path : String, remove_history : bool) -> bool {
     true
 }
 
-pub fn close_file(id : u64, path : String) {
-    FILE_HISTORY.lock().unwrap().push_back((id, path));
+pub fn close_file(file_id : u64, path : String) {
+    FILE_HISTORY.lock().unwrap().push_back((file_id, path));
     let mut files = FILES.write();
-    let Some(FilesEntry { is_open, .. }) = files.get_mut(&id) else { return; };
+    let Some(FilesEntry { is_open, .. }) = files.get_mut(&file_id) else { return; };
     if let Some(_) = is_open {
         *is_open = None;
         drop(files);
-        crate::filetabs::close(id);
+        crate::filetabs::close(file_id);
         crate::code::selection_changed();
         crate::code::remote_cursors::update();
-        crate::ws::WS.send(CloseFileC2SPacket { id });
+        crate::ws::WS.send(CloseFileC2SPacket { file_id });
     }
 }
 

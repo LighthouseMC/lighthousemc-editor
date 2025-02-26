@@ -97,7 +97,7 @@ pub fn add(entry : FileTreeEntry) {
 
     let entry_root = document.create_element("li").unwrap();
 
-    entry_root.set_attribute("editor_filetree_filename_lowercase", &entry.fsname.to_lowercase()).unwrap();
+    entry_root.set_attribute("editor_filetree_fsname_lowercase", &entry.fsname.to_lowercase()).unwrap();
 
     if (entry.is_dir) {
         entry_root.set_attribute("editor_filetree_is_dir", "true").unwrap();
@@ -121,8 +121,8 @@ pub fn add(entry : FileTreeEntry) {
 
         // Add existing children
         for (other_entry, child) in &*FILETREE.nodes() {
-            if let Some(other_parent_dir) = other_entry.parent_dir {
-                if (other_parent_dir == entry.id) {
+            if let Some(other_parent_dir_id) = other_entry.parent_dir {
+                if (other_parent_dir_id == entry.entry_id) {
                     entry_root.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(child).unwrap();
                 }
             }
@@ -133,7 +133,7 @@ pub fn add(entry : FileTreeEntry) {
         let div = document.create_element("div").unwrap();
         div.class_list().toggle_with_force("hbox", true).unwrap();
         div.class_list().toggle_with_force("editor_filetree_file", true).unwrap();
-        div.set_attribute("editor_filetree_file_id", &entry.id.to_string()).unwrap();
+        div.set_attribute("editor_filetree_file_id", &entry.entry_id.to_string()).unwrap();
         entry_root.append_child(&div).unwrap();
 
         let icon = document.create_element("i").unwrap();
@@ -146,17 +146,15 @@ pub fn add(entry : FileTreeEntry) {
         name.set_inner_html(&entry.fsname);
         div.append_child(&name).unwrap();
 
-        let id = entry.id;
-
-        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(id, String::from("TODO"), true); });
+        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(entry.entry_id, String::from("TODO"), true); });
         div.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref()).unwrap();
         click_callback.forget();
 
     }
 
     // Add to parent
-    if let Some(parent_dir) = entry.parent_dir {
-        if let Some((_, parent)) = FILETREE.nodes().iter().find(|(entry, _)| (! entry.is_dir) && parent_dir == entry.id) {
+    if let Some(parent_dir_id) = entry.parent_dir {
+        if let Some((_, parent)) = FILETREE.nodes().iter().find(|(entry, _)| (entry.is_dir) && parent_dir_id == entry.entry_id) {
             parent.query_selector(".editor_filetree_nest").unwrap().unwrap().append_child(&entry_root).unwrap();
         }
     } else {
@@ -183,8 +181,8 @@ fn sort_one(entry_root : &Element) {
             (true, false) => Ordering::Less,
             (false, true) => Ordering::Greater,
             (true, true) | (false, false) => {
-                let a_filename_lowercase = a.get_attribute("editor_filetree_filename_lowercase").unwrap();
-                let b_filename_lowercase = b.get_attribute("editor_filetree_filename_lowercase").unwrap();
+                let a_filename_lowercase = a.get_attribute("editor_filetree_fsname_lowercase").unwrap();
+                let b_filename_lowercase = b.get_attribute("editor_filetree_fsname_lowercase").unwrap();
                 a_filename_lowercase.cmp(&b_filename_lowercase)
             }
         }
@@ -203,21 +201,21 @@ pub fn sort() {
 }
 
 
-pub fn open_file(id : u64) {
+pub fn open_file(file_id : u64) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
     if let Some(element) = document.get_element_by_id("editor_filetree_selected") {
         element.remove_attribute("id").unwrap();
     }
     let nodes = FILETREE.nodes();
-    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && id == entry.id) else { return };
+    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && file_id == entry.entry_id) else { return };
     element.first_child().unwrap().dyn_into::<Element>().unwrap().set_id("editor_filetree_selected");
 }
 
 
-pub fn close_file(id : u64) {
+pub fn close_file(file_id : u64) {
     let nodes = FILETREE.nodes();
-    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && id == entry.id) else { return };
+    let Some((_, element)) = nodes.iter().find(|(entry, _)| (! entry.is_dir) && file_id == entry.entry_id) else { return };
     element.first_child().unwrap().dyn_into::<Element>().unwrap().remove_attribute("id").unwrap();
 }
 
