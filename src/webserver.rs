@@ -1,11 +1,14 @@
 use crate::util::str_replace_multiple;
 use voxidian_logger::pass;
+use axecs::prelude::*;
 use std::io;
 use tokio::net::{ TcpListener, ToSocketAddrs };
 use axum::{ Router, routing };
 use axum::http::{ StatusCode, HeaderValue };
 use axum::http::header::CONTENT_TYPE;
 use axum::response::{ IntoResponse, Html };
+use axum::extract::State;
+use axum::extract::ws::WebSocketUpgrade;
 
 
 mod mime {
@@ -17,6 +20,7 @@ mod mime {
 
 
 pub async fn run<A : ToSocketAddrs>(
+    cmds                 : Commands,
     bind_addrs           : A,
     display_game_address : &str
 ) -> Result<(), io::Error> {
@@ -40,10 +44,13 @@ pub async fn run<A : ToSocketAddrs>(
     let app = app.route("/editor", routing::get(Html(EDITOR)));
 
     // Editor Websocket
-    //let app = app.route("/editor/ws", routing::any(Self::handle_editor_ws));
+    let app = app.route("/editor/ws", routing::any(handle_editor_websocket));
 
     // Fallback
     let app = app.fallback((StatusCode::NOT_FOUND, Html(include_str!("assets/template/404.html"))));
+
+    // state
+    let app = app.with_state(cmds);
 
     // Run
     let listener = TcpListener::bind(bind_addrs).await?;
@@ -56,4 +63,13 @@ fn route_asset(content_type : &'static str, data : impl IntoResponse) -> impl In
     let mut response = data.into_response();
     response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
     response
+}
+
+
+async fn handle_editor_websocket(
+    upgrade : WebSocketUpgrade,
+    cmds    : State<Commands>
+) -> impl IntoResponse {
+    upgrade.protocols(["voxidian-editor"])
+        .on_upgrade(async move |socket| crate::peer::handle_editor_websocket(cmds.0, socket).await)
 }

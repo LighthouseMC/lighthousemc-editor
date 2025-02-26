@@ -18,6 +18,10 @@ use tokio::net::{ self, ToSocketAddrs };
 
 pub mod webserver;
 
+pub mod peer;
+
+pub mod instances;
+
 mod util;
 
 
@@ -43,7 +47,11 @@ impl EditorPlugin {
 
 impl Plugin for EditorPlugin {
     fn build(self, app : &mut App) {
+
         app.add_systems(Startup, run_webserver.pass((self.bind_addrs, self.display_game_addr)));
+
+        //app.add_systems(Cycle, peer::login_peers);
+
     }
 }
 
@@ -55,6 +63,7 @@ async fn run_webserver(
 
     info!("Starting editor server...");
     match (UntilExitFuture::new(cmds.clone(), webserver::run(
+        cmds.clone(),
         bind_addrs.as_slice(),
         &display_game_addr
     )).await) {

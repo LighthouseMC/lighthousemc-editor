@@ -18,7 +18,7 @@ pub enum DecodeError {
     /// The data in the buffer could not be parsed properly.
     ///
     /// Includes a message.
-    InvalidData(String),
+    InvalidData(Cow<'static, str>),
 
     /// The packet decoder did not consume the length specified in the previously received header.
     UnconsumedBuffer,
@@ -50,7 +50,7 @@ impl PacketDecode for Uuid { fn decode(buf : &mut PacketBuf) -> Result<Self, Dec
 
 impl<'l> PacketDecode for String { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {
     let len = buf.read_decode::<u32>()? as usize;
-    Ok(String::from_utf8(buf.read_u8s(len)?).map_err(|_| DecodeError::InvalidData("String data is not valid UTF8".to_string()))?)
+    Ok(String::from_utf8(buf.read_u8s(len)?).map_err(|_| DecodeError::InvalidData(Cow::Borrowed("String data is not valid UTF8")))?)
 } }
 
 impl<'l> PacketDecode for Cow<'l, str> { fn decode(buf : &mut PacketBuf) -> Result<Self, DecodeError> {

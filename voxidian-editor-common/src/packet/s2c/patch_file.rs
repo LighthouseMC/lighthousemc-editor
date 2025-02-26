@@ -25,7 +25,7 @@ impl PacketDecode for PatchFileS2CPacket {
         let dmp = DiffMatchPatch::new();
         Ok(Self {
             id      : buf.read_decode()?,
-            patches : dmp.patch_from_text(&buf.read_decode::<String>()?).map_err(|err| DecodeError::InvalidData(format!("{:?}", err)))?
+            patches : dmp.patch_from_text(&buf.read_decode::<String>()?).map_err(|err| DecodeError::InvalidData(Cow::Owned(format!("{:?}", err))))?
         })
     }
 }

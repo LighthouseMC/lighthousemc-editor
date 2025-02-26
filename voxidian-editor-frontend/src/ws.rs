@@ -73,7 +73,9 @@ pub(super) fn start() {
     };
     let hostname = location.hostname().unwrap();
     let port     = location.port().unwrap();
-    let ws_host  = format!("{protocol}//{hostname}:{port}/editor/ws");
+    let path     = location.pathname().unwrap();
+    let path     = path.trim_end_matches('/');
+    let ws_host  = format!("{protocol}//{hostname}:{port}{path}/ws");
     let ws       = WebSocket::new_with_str(&ws_host, "voxidian-editor").unwrap();
     ws.set_binary_type(BinaryType::Arraybuffer);
 
@@ -125,7 +127,6 @@ fn on_ws_open() {
 
 
 fn on_ws_message(e : MessageEvent) {
-    crate::warnjs(e.clone().into());
     let     data   = Uint8Array::new(&e.data().dyn_into::<ArrayBuffer>().unwrap()).to_vec();
     let mut buf    = PacketBuf::from(data);
     let     packet = S2CPackets::decode_prefixed(&mut buf).unwrap();
@@ -162,16 +163,16 @@ fn on_ws_message(e : MessageEvent) {
         S2CPackets::InitialState(initial_state) => {
             let window   = web_sys::window().unwrap();
             let document = window.document().unwrap();
-            // Subserver id
-            let subserver_id  = initial_state.plot_id.to_string();
-            let subserver_ids = document.get_elements_by_class_name("template_subserver_id");
-            for i in 0..subserver_ids.length() {
-                subserver_ids.get_with_index(i).unwrap().set_inner_html(&subserver_id);
+            // Plot id
+            let plot_id  = initial_state.plot_id.to_string();
+            let plot_ids = document.get_elements_by_class_name("template_plot_id");
+            for i in 0..plot_ids.length() {
+                plot_ids.get_with_index(i).unwrap().set_inner_html(&plot_id);
             }
-            // Subserver owner name
-            let subserver_owner_names = document.get_elements_by_class_name("template_subserver_owner_name");
-            for i in 0..subserver_owner_names.length() {
-                subserver_owner_names.get_with_index(i).unwrap().set_inner_html(&initial_state.plot_owner_name);
+            // Plot owner name
+            let plot_owner_names = document.get_elements_by_class_name("template_plot_owner_name");
+            for i in 0..plot_owner_names.length() {
+                plot_owner_names.get_with_index(i).unwrap().set_inner_html(&initial_state.plot_owner_name);
             }
             // File tree
             crate::filetree::clear();
