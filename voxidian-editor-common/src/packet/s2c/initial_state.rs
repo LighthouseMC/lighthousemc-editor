@@ -5,7 +5,7 @@ use super::*;
 pub struct InitialStateS2CPacket<'l> {
     pub plot_id         : u64,
     pub plot_owner_name : Cow<'l, str>,
-    pub tree_entries    : Cow<'l, [FileTreeEntry]>
+    pub tree_entries    : Cow<'l, [FileTreeEntry<'l>]>
 }
 
 impl<'l> PacketMeta for InitialStateS2CPacket<'l> {
@@ -39,7 +39,7 @@ impl<'l> PacketDecode for InitialStateS2CPacket<'l> {
                         entry_id   : buf.read_decode::<u64>()?,
                         is_dir     : buf.read_decode::<bool>()?,
                         parent_dir : buf.read_decode::<Option<u64>>()?,
-                        fsname     : buf.read_decode::<String>()?
+                        fsname     : buf.read_decode::<Cow<'l, str>>()?
                     })
                 }
                 Cow::Owned(files)
@@ -50,10 +50,10 @@ impl<'l> PacketDecode for InitialStateS2CPacket<'l> {
 
 
 #[derive(Debug, Clone)]
-pub struct FileTreeEntry {
+pub struct FileTreeEntry<'l> {
     /// Whether this is a directory or file id depends on `is_dir`.
     pub entry_id   : u64,
     pub is_dir     : bool,
     pub parent_dir : Option<u64>,
-    pub fsname     : String
+    pub fsname     : Cow<'l, str>
 }

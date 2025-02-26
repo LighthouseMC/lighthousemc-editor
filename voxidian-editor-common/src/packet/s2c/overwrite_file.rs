@@ -38,8 +38,17 @@ impl<'l> PacketDecode for OverwriteFileS2CPacket<'l> {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FileContents<'l> {
     NonText,
     Text(Cow<'l, str>)
+}
+
+impl<'l> FileContents<'l> {
+    pub fn as_ref(&'l self) -> FileContents<'l> {
+        match (self) {
+            Self::NonText    => Self::NonText,
+            Self::Text(text) => Self::Text(Cow::Borrowed(text))
+        }
+    }
 }

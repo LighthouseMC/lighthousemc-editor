@@ -12,6 +12,8 @@ mod patch_file;
 pub use patch_file::*;
 mod selections;
 pub use selections::*;
+mod close_file;
+pub use close_file::*;
 
 
 use super::*;
@@ -25,5 +27,6 @@ packet_group!{ pub enum S2CPackets<'l> {
     InitialState(InitialStateS2CPacket<'l>),
     OvewriteFile(OverwriteFileS2CPacket<'l>),
     PatchFile(PatchFileS2CPacket),
-    Selections(SelectionsS2CPacket<'l>)
+    Selections(SelectionsS2CPacket<'l>),
+    CloseFile(CloseFileS2CPacket)
 } }

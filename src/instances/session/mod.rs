@@ -1,23 +1,28 @@
-use crate::peer::comms;
-use super::EditorInstance;
-use voxidian_editor_common::packet::s2c::*;
+use crate::peer::{ OutgoingPeerCommand, IncomingPeerEvent };
 use voxidian_editor_common::packet::c2s::*;
 use voxidian_database::DBPlotID;
 use voxidian_logger::debug;
 use axecs::prelude::*;
 use std::time::{ Instant, Duration };
-use axum::extract::ws::WebSocket;
+use tokio::sync::mpsc;
 use openssl::rand::rand_priv_bytes;
 use uuid::Uuid;
+
+
+mod state;
+pub use state::*;
 
 
 #[derive(Component)]
 pub struct EditorSession {
     plot_id      : DBPlotID,
+
     client_uuid  : Uuid,
     client_name  : String,
+
     session_code : String,
     session_step : EditorSessionStep,
+
     closed       : bool
 }
 
@@ -26,7 +31,9 @@ pub(crate) enum EditorSessionStep {
         expires_at : Instant
     },
     Active {
-        socket : WebSocket
+        outgoing_commands_tx : mpsc::UnboundedSender<OutgoingPeerCommand>,
+        incoming_events_rx   : mpsc::UnboundedReceiver<IncomingPeerEvent>,
+        state                : EditorSessionState
     }
 }
 
@@ -84,26 +91,31 @@ impl EditorSession {
     pub(crate) fn session_step(&self) -> &EditorSessionStep {
         &self.session_step
     }
-    pub(crate) async fn activate(&mut self, mut socket : WebSocket, instance : &EditorInstance)  {
+    pub(crate) fn activate(
+        &mut self,
+        outgoing_commands_tx : mpsc::UnboundedSender<OutgoingPeerCommand>,
+        incoming_events_rx   : mpsc::UnboundedReceiver<IncomingPeerEvent>
+    )  {
         let EditorSessionStep::Pending { .. } = self.session_step else {
             panic!("`EditorSession::activate` called on already activated `EditorSession`");
         };
 
-        if let Err(_) = comms::send_packet(&mut socket, instance.state().to_initial_state()).await { self.close(); }
-
-        if let Err(_) = comms::send_packet(&mut socket, LoginSuccessS2CPacket).await { self.close(); }
-
         debug!("Opened editor session for {:?} on plot {}.", self.client_name, self.plot_id);
         self.session_step = EditorSessionStep::Active {
-            socket
+            outgoing_commands_tx,
+            incoming_events_rx,
+            state                : EditorSessionState::new()
         };
     }
 
 
     pub fn close(&mut self) {
         if (! self.closed) {
-            debug!("Closed editor session of {:?} on plot {}.", self.client_name, self.plot_id);
             self.closed = true;
+            if let EditorSessionStep::Active { outgoing_commands_tx, .. } = &mut self.session_step {
+                let _ = outgoing_commands_tx.send(OutgoingPeerCommand::Close);
+            }
+            debug!("Closed editor session of {:?} on plot {}.", self.client_name, self.plot_id);
         }
     }
 
@@ -111,7 +123,7 @@ impl EditorSession {
 
 
 
-pub(crate) async fn read_session_packets(
+pub(crate) async fn read_session_events(
         cmds     : Commands,
     mut sessions : Entities<(Entity, &mut EditorSession)>
 ) {
@@ -124,25 +136,35 @@ pub(crate) async fn read_session_packets(
                 }
             },
 
-            EditorSessionStep::Active { socket } => {
-                match (comms::try_read_packet::<C2SPackets>(socket).await) {
-                    Ok(Some(packet)) => { match (packet) {
+            EditorSessionStep::Active { incoming_events_rx, state, .. } => {
+                match (incoming_events_rx.try_recv()) {
+                    Ok(event) => { match (event) {
 
-                        C2SPackets::Handshake(_) => { },
+                        IncomingPeerEvent::Recieve(packet) => { match (packet) {
 
-                        C2SPackets::Keepalive(keepalive_c2_spacket) => todo!(),
+                            C2SPackets::Handshake(_) => { },
 
-                        C2SPackets::OpenFile(OpenFileC2SPacket { file_id }) => todo!(),
+                            C2SPackets::Keepalive(_) => { },
 
-                        C2SPackets::CloseFile(close_file_c2_spacket) => todo!(),
+                            C2SPackets::OpenFile(OpenFileC2SPacket { file_id }) => {
+                                state.open_file(file_id);
+                            },
 
-                        C2SPackets::PatchFile(patch_file_c2_spacket) => todo!(),
+                            C2SPackets::CloseFile(CloseFileC2SPacket { file_id }) => {
+                                state.close_file(file_id);
+                            },
 
-                        C2SPackets::Selections(selections_c2_spacket) => todo!()
+                            C2SPackets::PatchFile(_) => { },
+
+                            C2SPackets::Selections(_) => { }
+
+                        } },
+
+                        IncomingPeerEvent::Close => { session.close(); }
 
                     } },
-                    Ok(None) => { },
-                    Err(_) => { session.close(); }
+                    Err(mpsc::error::TryRecvError::Empty) => { },
+                    Err(mpsc::error::TryRecvError::Disconnected) => { session.close(); }
                 }
             }
 

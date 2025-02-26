@@ -52,7 +52,7 @@ pub fn open_file(file_id : u64, path : String) {
         close.set_inner_html("×");
         div.append_child(&close).unwrap();
         let path1 = path.clone();
-        let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(file_id, path1.clone()));
+        let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(file_id, Some(path1.clone())));
         close.add_event_listener_with_callback("click", close_callback.as_ref().unchecked_ref()).unwrap();
         close_callback.forget();
 
@@ -89,8 +89,9 @@ pub fn close(file_id : u64) {
     match (found.map(|i| filetabs.children().get_with_index(i))) {
         Some(Some(tab)) => {
             tab.set_id("editor_filetab_selected");
-            let path = tab.get_attribute("editor_filetab_file_path").unwrap();
-            set_filepath(&path);
+            let file_id   = tab.get_attribute("editor_filetab_file_id").unwrap().parse::<u64>().unwrap();
+            let file_path = tab.get_attribute("editor_filetab_file_path").unwrap();
+            set_filepath(&file_path);
             crate::filetree::open_file(file_id);
             if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read().get(&file_id) {
                 match (is_open) {

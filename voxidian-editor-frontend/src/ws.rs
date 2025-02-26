@@ -216,6 +216,11 @@ fn on_ws_message(e : MessageEvent) {
                 crate::code::remote_cursors::REMOTE_SELECTIONS.write().remove(&selections_event.client_id);
             }
             crate::code::remote_cursors::update();
+        },
+
+
+        S2CPackets::CloseFile(close_file) => {
+            crate::state::close_file(close_file.file_id, None);
         }
 
 

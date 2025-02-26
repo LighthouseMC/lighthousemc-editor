@@ -5,24 +5,25 @@ use std::sync::Arc;
 
 pub mod session;
 
-pub mod state;
-use state::EditorState;
+mod state;
+pub use state::EditorInstanceState;
 
 
 #[derive(Component)]
 pub struct EditorInstance {
     plot_id : DBPlotID,
-    state   : EditorState
+    state   : EditorInstanceState
 }
 
 impl EditorInstance {
 
     /// # Safety:
     /// The plot must not be managed by any other editor instance.
+    /// The plot must be locked and unlocked properly, preventing management conflicts with other nodes.
     pub async unsafe fn create(plot_id : DBPlotID, database : Arc<VoxidianDB>) -> Result<Option<Self>, DBError> {
         Ok(Some(Self {
             plot_id,
-            state   : { let Some(state) = EditorState::load(&database, plot_id).await? else { return Ok(None); }; state }
+            state   : { let Some(state) = EditorInstanceState::load(&database, plot_id).await? else { return Ok(None); }; state }
         }))
     }
 
@@ -31,7 +32,7 @@ impl EditorInstance {
         self.plot_id
     }
 
-    pub fn state(&self) -> &EditorState {
+    pub fn state(&self) -> &EditorInstanceState {
         &self.state
     }
 

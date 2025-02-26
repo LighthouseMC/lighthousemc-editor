@@ -9,7 +9,7 @@ use web_sys::{ DomTokenList, Element, MouseEvent };
 static FILETREE : FileTreeRootContainer = FileTreeRootContainer::new();
 struct FileTreeRootContainer {
     root  : LazyCell<Element>,
-    nodes : LazyCell<Mutex<Vec<(FileTreeEntry, Element)>>>
+    nodes : LazyCell<Mutex<Vec<(FileTreeEntry<'static>, Element)>>>
 }
 impl FileTreeRootContainer { const fn new() -> Self { Self {
     root : LazyCell::new(|| {
@@ -23,7 +23,7 @@ impl FileTreeRootContainer {
 
     fn root(&self) -> &Element { &self.root }
 
-    fn nodes(&self) -> MutexGuard<Vec<(FileTreeEntry, Element)>> { self.nodes.lock().unwrap() }
+    fn nodes(&self) -> MutexGuard<Vec<(FileTreeEntry<'static>, Element)>> { self.nodes.lock().unwrap() }
 
 }
 unsafe impl Sync for FileTreeRootContainer { }
@@ -91,7 +91,7 @@ pub fn clear() {
 }
 
 
-pub fn add(entry : FileTreeEntry) {
+pub fn add(entry : FileTreeEntry<'static>) {
     let window   = web_sys::window().unwrap();
     let document = window.document().unwrap();
 

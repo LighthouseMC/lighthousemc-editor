@@ -42,11 +42,11 @@ pub enum FilesEntryContents {
 }
 
 
-pub fn add_tree_entry(entry : FileTreeEntry) {
+pub fn add_tree_entry(entry : FileTreeEntry<'static>) {
     if (! entry.is_dir) {
         FILES.write().insert(entry.entry_id, FilesEntry {
             file_id : entry.entry_id,
-            fsname  : entry.fsname.clone(),
+            fsname  : entry.fsname.to_string(),
             is_open : None
         });
     }
@@ -88,8 +88,10 @@ pub fn open_file(file_id : u64, path : String, remove_history : bool) -> bool {
     true
 }
 
-pub fn close_file(file_id : u64, path : String) {
-    FILE_HISTORY.lock().unwrap().push_back((file_id, path));
+pub fn close_file(file_id : u64, history_path : Option<String>) {
+    if let Some(history_path) = history_path {
+        FILE_HISTORY.lock().unwrap().push_back((file_id, history_path));
+    }
     let mut files = FILES.write();
     let Some(FilesEntry { is_open, .. }) = files.get_mut(&file_id) else { return; };
     if let Some(_) = is_open {

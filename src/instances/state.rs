@@ -1,17 +1,17 @@
-use voxidian_editor_common::packet::s2c::{ InitialStateS2CPacket, FileTreeEntry };
-use voxidian_database::{ VoxidianDB, DBPlotID, DBFSDirectoryID, DBFSDirectory, DBFSFileID, DBFSFile, DBError };
+use voxidian_editor_common::packet::s2c::{ InitialStateS2CPacket, FileTreeEntry, FileContents };
+use voxidian_database::{ VoxidianDB, DBPlotID, DBFSDirectoryID, DBFSDirectory, DBFSFileID, DBError };
 use std::collections::BTreeMap;
 
 
-pub struct EditorState {
+pub struct EditorInstanceState {
     plot_id         : DBPlotID,
     plot_owner_name : String,
 
     directories : BTreeMap<DBFSDirectoryID, DBFSDirectory>,
-    files       : BTreeMap<DBFSFileID, DBFSFile>
+    files       : BTreeMap<DBFSFileID, StateFile>
 }
 
-impl EditorState {
+impl EditorInstanceState {
 
     pub async fn load(database : &VoxidianDB, plot_id : DBPlotID) -> Result<Option<Self>, DBError> {
         let Some(plot) = database.get_plot(plot_id).await? else { return Ok(None); };
@@ -28,17 +28,21 @@ impl EditorState {
             files           : {
                 let mut map = BTreeMap::new();
                 for file in database.get_plot_files(plot_id).await? {
-                    map.insert(file.id, file);
+                    map.insert(file.id, StateFile {
+                        parent_dir : file.parent_dir,
+                        fsname     : file.fsname,
+                        contents   : String::from_utf8(file.blob).map_or(FileContents::NonText, |text| FileContents::Text(text.into()))
+                    });
                 }
                 map
             }
         }))
     }
 
-    pub(crate) fn to_initial_state(&self) -> InitialStateS2CPacket {
+    pub(crate) fn to_initial_state_packet(&self) -> InitialStateS2CPacket<'static> {
         InitialStateS2CPacket {
             plot_id         : self.plot_id,
-            plot_owner_name : (&self.plot_owner_name).into(),
+            plot_owner_name : self.plot_owner_name.clone().into(),
             tree_entries    : {
                 let mut entries = Vec::with_capacity(self.directories.len() + self.files.len());
                 for (_, directory) in &self.directories {
@@ -46,15 +50,15 @@ impl EditorState {
                         entry_id   : directory.id,
                         is_dir     : true,
                         parent_dir : directory.parent_dir,
-                        fsname     : directory.fsname.clone()
+                        fsname     : directory.fsname.clone().into()
                     });
                 }
-                for (_, file) in &self.files {
+                for (file_id, file) in &self.files {
                     entries.push(FileTreeEntry {
-                        entry_id   : file.id,
+                        entry_id   : *file_id,
                         is_dir     : false,
                         parent_dir : file.parent_dir,
-                        fsname     : file.fsname.clone()
+                        fsname     : file.fsname.clone().into()
                     });
                 }
                 entries.into()
@@ -62,4 +66,16 @@ impl EditorState {
         }
     }
 
+
+    pub(crate) fn files(&self) -> &BTreeMap<DBFSFileID, StateFile> {
+        &self.files
+    }
+
+}
+
+
+pub struct StateFile {
+    pub parent_dir : Option<DBFSDirectoryID>,
+    pub fsname     : String,
+    pub contents   : FileContents<'static>
 }

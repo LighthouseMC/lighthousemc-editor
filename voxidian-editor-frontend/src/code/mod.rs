@@ -52,14 +52,14 @@ pub fn init() {
             (true, false, "w") => {
                 event.prevent_default();
                 if let Some((file_id, file_path)) = crate::filetabs::currently_focused() {
-                    crate::state::close_file(file_id, file_path);
+                    crate::state::close_file(file_id, Some(file_path));
                 }
             },
 
             (true, false, "W") => {
                 event.prevent_default();
                 for (file_id, file_path) in crate::filetabs::list_all() {
-                    crate::state::close_file(file_id, file_path);
+                    crate::state::close_file(file_id, Some(file_path));
                 }
             },
 
