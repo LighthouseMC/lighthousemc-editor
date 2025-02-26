@@ -184,7 +184,7 @@ fn on_ws_message(e : MessageEvent) {
 
 
         S2CPackets::OvewriteFile(overwrite_file) => {
-            if let Some(FilesEntry { is_open, fsname, .. }) = crate::state::FILES.write().get_mut(&overwrite_file.file_id) {
+            if let Some(FilesEntry { is_open, fsname, .. }) = crate::state::FILES.write_files().get_mut(&overwrite_file.file_id) {
                 crate::filetabs::overwrite(overwrite_file.file_id, fsname, &overwrite_file.contents);
                 *is_open = Some(Some(match (overwrite_file.contents) {
                     FileContents::NonText    => FilesEntryContents::NonText,
@@ -195,7 +195,7 @@ fn on_ws_message(e : MessageEvent) {
 
 
         S2CPackets::PatchFile(patch_file) => {
-            if let Some(FilesEntry { is_open : Some(Some(FilesEntryContents::Text(old_client_shadow))), .. }) = crate::state::FILES.write().get_mut(&patch_file.file_id) {
+            if let Some(FilesEntry { is_open : Some(Some(FilesEntryContents::Text(old_client_shadow))), .. }) = crate::state::FILES.write_files().get_mut(&patch_file.file_id) {
                 let dmp = DiffMatchPatch::new();
                 let (new_client_shadow, _) = dmp.patch_apply(&patch_file.patches, &old_client_shadow).unwrap();
                 *old_client_shadow = new_client_shadow;

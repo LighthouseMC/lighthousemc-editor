@@ -17,7 +17,7 @@ pub enum OutgoingPeerCommand {
 }
 
 pub enum IncomingPeerEvent {
-    Recieve(C2SPackets<'static>),
+    Recieve(C2SPackets),
     Close
 }
 

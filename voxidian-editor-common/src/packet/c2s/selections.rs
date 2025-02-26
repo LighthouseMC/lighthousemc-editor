@@ -44,7 +44,7 @@ impl PacketDecode for SelectionsC2SPacket {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectionRange {
     pub start : usize,
     pub end   : usize

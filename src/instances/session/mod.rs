@@ -142,8 +142,6 @@ pub(crate) async fn read_session_events(
 
                         IncomingPeerEvent::Recieve(packet) => { match (packet) {
 
-                            C2SPackets::Handshake(_) => { },
-
                             C2SPackets::Keepalive(_) => { },
 
                             C2SPackets::OpenFile(OpenFileC2SPacket { file_id }) => {
@@ -156,7 +154,9 @@ pub(crate) async fn read_session_events(
 
                             C2SPackets::PatchFile(_) => { },
 
-                            C2SPackets::Selections(_) => { }
+                            C2SPackets::Selections(SelectionsC2SPacket { selections }) => {
+                                state.update_selections(selections);
+                            }
 
                         } },
 

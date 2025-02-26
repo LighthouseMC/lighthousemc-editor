@@ -146,7 +146,19 @@ pub fn add(entry : FileTreeEntry<'static>) {
         name.set_inner_html(&entry.fsname);
         div.append_child(&name).unwrap();
 
-        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(entry.entry_id, String::from("TODO"), true); });
+        let mut path = vec![ &*entry.fsname ];
+        let dirs = crate::state::FILES.read_directories();
+        let mut parent_dir_id0 = entry.parent_dir;
+        loop {
+            if let Some(parent_dir_id1) = parent_dir_id0 {
+                let parent_dir = &dirs[&parent_dir_id1];
+                path.push(parent_dir.fsname.as_str());
+                parent_dir_id0 = parent_dir.parent_dir;
+            } else { break; }
+        }
+        path.reverse();
+        let path = path.join("/");
+        let click_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(entry.entry_id, path.clone(), true); });
         div.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref()).unwrap();
         click_callback.forget();
 

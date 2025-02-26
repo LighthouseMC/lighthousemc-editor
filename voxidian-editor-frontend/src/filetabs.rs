@@ -93,7 +93,7 @@ pub fn close(file_id : u64) {
             let file_path = tab.get_attribute("editor_filetab_file_path").unwrap();
             set_filepath(&file_path);
             crate::filetree::open_file(file_id);
-            if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read().get(&file_id) {
+            if let Some(FilesEntry { is_open, .. }) = crate::state::FILES.read_files().get(&file_id) {
                 match (is_open) {
                     Some(Some(FilesEntryContents::Text(_))) => { crate::code::open_monaco(file_id); },
                     Some(Some(FilesEntryContents::NonText)) => { crate::code::open_nontext(); },

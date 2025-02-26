@@ -1,14 +1,17 @@
 use crate::peer::OutgoingPeerCommand;
 use crate::instances::EditorInstance;
+use crate::util::Dirty;
 use super::{ EditorSession, EditorSessionStep };
 use voxidian_editor_common::packet::s2c::*;
+use voxidian_editor_common::packet::c2s::SelectionRange;
 use voxidian_database::DBFSFileID;
 use axecs::prelude::*;
 use std::collections::BTreeMap;
 
 
 pub struct EditorSessionState {
-    file_shadows : BTreeMap<DBFSFileID, FileShadow>
+    file_shadows : BTreeMap<DBFSFileID, FileShadow>,
+    selections   : Dirty<Option<(DBFSFileID, Vec<SelectionRange>)>>
 }
 
 pub struct FileShadow {
@@ -32,7 +35,8 @@ pub enum FileShadowContent {
 impl EditorSessionState {
 
     pub(super) fn new() -> Self { Self {
-        file_shadows : BTreeMap::new()
+        file_shadows : BTreeMap::new(),
+        selections   : Dirty::new_clean(None)
     } }
 
     pub(super) fn open_file(&mut self, file_id : DBFSFileID) {
@@ -53,6 +57,10 @@ impl EditorSessionState {
         if let Some(shadow) = self.file_shadows.get_mut(&file_id) {
             shadow.step = FileShadowStep::Closing;
         }
+    }
+
+    pub(super) fn update_selections(&mut self, selections : Option<(DBFSFileID, Vec<SelectionRange>)>) {
+        Dirty::set(&mut self.selections, selections);
     }
 
 }
@@ -91,6 +99,11 @@ pub(crate) async fn update_state(
                 for file_id in remove {
                     state.file_shadows.remove(&file_id);
                 }
+            }
+
+            // Selections.
+            if (Dirty::take_dirty(&mut state.selections)) {
+                // TODO
             }
 
         }

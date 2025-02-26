@@ -17,7 +17,7 @@ pub fn send_patches_to_server() {
         let container = containers.get_with_index(i).unwrap();
         let file_id = container.get_attribute("editor_code_file_id").unwrap().parse::<u64>().unwrap();
 
-        let mut files = crate::state::FILES.write();
+        let mut files = crate::state::FILES.write_files();
         let Some(Some(FilesEntryContents::Text(client_shadow))) = &mut files.get_mut(&file_id).unwrap().is_open else { continue };
         let client_text = monaco::EDITORS.read()[&file_id].get_model().get_value(1);
 

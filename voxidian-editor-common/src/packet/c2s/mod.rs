@@ -16,8 +16,7 @@ use super::*;
 use std::borrow::Cow;
 
 
-packet_group!{ pub enum C2SPackets<'l> {
-    Handshake(HandshakeC2SPacket<'l>),
+packet_group!{ pub enum C2SPackets {
     Keepalive(KeepaliveC2SPacket),
     OpenFile(OpenFileC2SPacket),
     CloseFile(CloseFileC2SPacket),

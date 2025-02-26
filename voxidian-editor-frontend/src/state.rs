@@ -7,17 +7,25 @@ use std::collections::{ HashMap, VecDeque };
 
 pub static FILES : FilesContainer = FilesContainer::new();
 pub struct FilesContainer {
-    files : LazyCell<RwLock<HashMap<u64, FilesEntry>>>
+    files       : LazyCell<RwLock<HashMap<u64, FilesEntry>>>,
+    directories : LazyCell<RwLock<HashMap<u64, DirectoriesEntry>>>
 }
 impl FilesContainer { const fn new() -> Self { Self {
-    files : LazyCell::new(|| RwLock::new(HashMap::new()))
+    files       : LazyCell::new(|| RwLock::new(HashMap::new())),
+    directories : LazyCell::new(|| RwLock::new(HashMap::new()))
 } } }
 impl FilesContainer {
-    pub fn read(&self) -> RwLockReadGuard<HashMap<u64, FilesEntry>> {
+    pub fn read_files(&self) -> RwLockReadGuard<HashMap<u64, FilesEntry>> {
         self.files.read().unwrap()
     }
-    pub fn write(&self) -> RwLockWriteGuard<HashMap<u64, FilesEntry>> {
+    pub fn write_files(&self) -> RwLockWriteGuard<HashMap<u64, FilesEntry>> {
         self.files.write().unwrap()
+    }
+    pub fn read_directories(&self) -> RwLockReadGuard<HashMap<u64, DirectoriesEntry>> {
+        self.directories.read().unwrap()
+    }
+    pub fn write_directories(&self) -> RwLockWriteGuard<HashMap<u64, DirectoriesEntry>> {
+        self.directories.write().unwrap()
     }
 }
 unsafe impl Sync for FilesContainer { }
@@ -41,13 +49,24 @@ pub enum FilesEntryContents {
     Text(String)
 }
 
+#[derive(Debug)]
+pub struct DirectoriesEntry {
+    pub fsname     : String,
+    pub parent_dir : Option<u64>
+}
+
 
 pub fn add_tree_entry(entry : FileTreeEntry<'static>) {
     if (! entry.is_dir) {
-        FILES.write().insert(entry.entry_id, FilesEntry {
+        FILES.write_files().insert(entry.entry_id, FilesEntry {
             file_id : entry.entry_id,
             fsname  : entry.fsname.to_string(),
             is_open : None
+        });
+    } else {
+        FILES.write_directories().insert(entry.entry_id, DirectoriesEntry {
+            fsname     : entry.fsname.to_string(),
+            parent_dir : entry.parent_dir
         });
     }
     crate::filetree::add(entry);
@@ -57,7 +76,7 @@ pub fn open_file(file_id : u64, path : String, remove_history : bool) -> bool {
     if (remove_history) {
         FILE_HISTORY.lock().unwrap().retain(|(file, _)| *file != file_id);
     }
-    let mut files = FILES.write();
+    let mut files = FILES.write_files();
     let Some(FilesEntry { is_open, .. }) = files.get_mut(&file_id) else { return false; };
     crate::code::remote_cursors::update();
     let mut should_proper_update_cursor = true;
@@ -92,7 +111,7 @@ pub fn close_file(file_id : u64, history_path : Option<String>) {
     if let Some(history_path) = history_path {
         FILE_HISTORY.lock().unwrap().push_back((file_id, history_path));
     }
-    let mut files = FILES.write();
+    let mut files = FILES.write_files();
     let Some(FilesEntry { is_open, .. }) = files.get_mut(&file_id) else { return; };
     if let Some(_) = is_open {
         *is_open = None;
