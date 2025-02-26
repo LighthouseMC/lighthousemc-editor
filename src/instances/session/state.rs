@@ -4,9 +4,10 @@ use crate::util::Dirty;
 use super::{ EditorSession, EditorSessionStep };
 use voxidian_editor_common::packet::s2c::*;
 use voxidian_editor_common::packet::c2s::SelectionRange;
+use voxidian_editor_common::dmp;
 use voxidian_database::DBFSFileID;
 use axecs::prelude::*;
-use std::collections::BTreeMap;
+use std::collections::{ BTreeMap, VecDeque };
 
 
 pub struct EditorSessionState {
@@ -19,6 +20,7 @@ pub struct FileShadow {
     content : FileShadowContent
 }
 
+#[derive(Clone, Copy)]
 pub enum FileShadowStep {
     Opening,
     Open,
@@ -28,7 +30,10 @@ pub enum FileShadowStep {
 pub enum FileShadowContent {
     Loading,
     NonText,
-    Text(String)
+    Text {
+        text           : String,
+        queued_patches : VecDeque<dmp::Patches<dmp::Efficient>>
+    }
 }
 
 
@@ -38,6 +43,10 @@ impl EditorSessionState {
         file_shadows : BTreeMap::new(),
         selections   : Dirty::new_clean(None)
     } }
+
+    pub fn file_shadows_mut(&mut self) -> &mut BTreeMap<DBFSFileID, FileShadow> {
+        &mut self.file_shadows
+    }
 
     pub fn selections(&self) -> &Option<(DBFSFileID, Vec<SelectionRange>)> {
         &*self.selections
@@ -64,8 +73,31 @@ impl EditorSessionState {
         }
     }
 
+    pub(super) fn patch_file(&mut self, file_id : DBFSFileID, incoming_patches : dmp::Patches<dmp::Efficient>) {
+        if let Some(shadow) = self.file_shadows.get_mut(&file_id) {
+            if let FileShadowStep::Open = shadow.step {
+                if let FileShadowContent::Text { queued_patches, .. } = &mut shadow.content {
+                    queued_patches.push_back(incoming_patches);
+                }
+            }
+        }
+    }
+
     pub(super) fn update_selections(&mut self, selections : Option<(DBFSFileID, Vec<SelectionRange>)>) {
         Dirty::set(&mut self.selections, selections);
+    }
+
+}
+
+
+impl FileShadow {
+
+    pub fn step(&self) -> FileShadowStep {
+        self.step
+    }
+
+    pub fn content_mut(&mut self) -> &mut FileShadowContent {
+        &mut self.content
     }
 
 }
@@ -76,6 +108,7 @@ pub(crate) async fn update_state(
     mut instances : Entities<(&mut EditorInstance)>,
     mut sessions  : Entities<(&mut EditorSession)>
 ) {
+
     for session in &mut sessions {
         if let EditorSessionStep::Active { outgoing_commands_tx, state, .. } = &mut session.session_step {
             let Some(instance) = instances.iter_mut().find(|instance| instance.plot_id == session.plot_id) else { continue; };
@@ -86,18 +119,36 @@ pub(crate) async fn update_state(
                 for (&file_id, shadow) in state.file_shadows.iter_mut() {
                     match (shadow.step) {
                         FileShadowStep::Opening => {
-                            shadow.step = FileShadowStep::Open;
                             if let Some(file) = instance.state.files().get(&file_id) {
                                 let _ = outgoing_commands_tx.send(OutgoingPeerCommand::Send(S2CPackets::OvewriteFile(OverwriteFileS2CPacket {
                                     file_id,
-                                    contents : file.contents.clone()
+                                    contents : file.contents().clone()
                                 })));
+                                shadow.step = FileShadowStep::Open;
+                                shadow.content = match (&file.contents()) {
+                                    FileContents::NonText => FileShadowContent::NonText,
+                                    FileContents::Text(text) => FileShadowContent::Text {
+                                        text           : text.to_string(),
+                                        queued_patches : VecDeque::new()
+                                    }
+                                };
                             } else {
                                 let _ = outgoing_commands_tx.send(OutgoingPeerCommand::Send(S2CPackets::CloseFile(CloseFileS2CPacket { file_id })));
                                 remove.push(file_id);
+                                shadow.step = FileShadowStep::Closing;
                             }
                         },
-                        FileShadowStep::Open    => { },
+                        FileShadowStep::Open => {
+                            if let FileShadowContent::Text { queued_patches, .. } = &mut shadow.content {
+                                for patches in queued_patches.drain(..) {
+                                    instance.events.push_back(EditorInstanceEvent::PatchFile {
+                                        client_uuid : session.client_uuid,
+                                        file_id,
+                                        patches
+                                    })
+                                }
+                            }
+                        },
                         FileShadowStep::Closing => { remove.push(file_id); }
                     }
                 }
@@ -118,4 +169,5 @@ pub(crate) async fn update_state(
 
         }
     }
+
 }

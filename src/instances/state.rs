@@ -70,12 +70,26 @@ impl EditorInstanceState {
     pub(crate) fn files(&self) -> &BTreeMap<DBFSFileID, StateFile> {
         &self.files
     }
+    pub(crate) fn files_mut(&mut self) -> &mut BTreeMap<DBFSFileID, StateFile> {
+        &mut self.files
+    }
 
 }
 
 
 pub struct StateFile {
-    pub parent_dir : Option<DBFSDirectoryID>,
-    pub fsname     : String,
-    pub contents   : FileContents<'static>
+    parent_dir : Option<DBFSDirectoryID>,
+    fsname     : String,
+    contents   : FileContents<'static>
+}
+
+impl StateFile {
+
+    pub fn contents(&self) -> &FileContents<'static> {
+        &self.contents
+    }
+    pub fn contents_mut(&mut self) -> &mut FileContents<'static> {
+        &mut self.contents
+    }
+
 }

@@ -33,7 +33,7 @@ pub async fn run<A : ToSocketAddrs>(
     let app = app.route("/editor/voxidian_editor_frontend_bg.wasm", routing::get(async || route_asset(mime::WASM, include_bytes! ("../voxidian-editor-frontend/pkg/voxidian_editor_frontend_bg.wasm" ).into_response())));
 
     // Root
-    let app = app.route("/", routing::get(Html(include_str!("assets/template/root.html").replace("{{DISPLAY_GAME_ADDRESS}}", display_game_address))));
+    //let app = app.route("/", routing::get(Html(include_str!("assets/template/root.html").replace("{{DISPLAY_GAME_ADDRESS}}", display_game_address))));
 
     // Editor
     const EDITOR : &'static str = str_replace_multiple!( include_str!("assets/template/editor.html"), [

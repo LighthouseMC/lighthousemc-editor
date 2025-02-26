@@ -47,7 +47,7 @@ async fn create_session_and_instance(
     let instance = unsafe{ EditorInstance::create(plot_id, database) }.await.unwrap().unwrap();
     cmds.spawn(instance).await;
 
-    let session = unsafe{ EditorSession::create::<8>(
+    let session = unsafe{ EditorSession::create::<2>(
         plot_id,
         Uuid::new_v4(),
         "Totobirb".into(),
@@ -56,7 +56,7 @@ async fn create_session_and_instance(
     voxidian_logger::pass!("http://127.0.0.1:5123/editor#{}", session.session_code());
     cmds.spawn(session).await;
 
-    let session = unsafe{ EditorSession::create::<8>(
+    let session = unsafe{ EditorSession::create::<2>(
         plot_id,
         Uuid::new_v4(),
         "Hello".into(),

@@ -53,7 +53,7 @@ async fn try_login_editor_websocket(
                             result = Some((
                                 outgoing_commands_rx,
                                 incoming_events_tx,
-                                instance.state().to_initial_state_packet()
+                                instance.state.to_initial_state_packet()
                             ));
 
                         }

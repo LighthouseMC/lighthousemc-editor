@@ -100,6 +100,9 @@ impl EditorSession {
     pub(crate) fn session_step(&self) -> &EditorSessionStep {
         &self.session_step
     }
+    pub(crate) fn session_step_mut(&mut self) -> &mut EditorSessionStep {
+        &mut self.session_step
+    }
     pub(crate) fn activate(
         &mut self,
         outgoing_commands_tx : mpsc::UnboundedSender<OutgoingPeerCommand>,
@@ -138,6 +141,27 @@ pub(crate) async fn read_session_events(
     mut sessions  : Entities<(Entity, &mut EditorSession)>
 ) {
     for (entity, session) in &mut sessions {
+
+        // Close sessions.
+        if (session.closed != 0) {
+            if (session.closed == 1) {
+                session.closed = 2;
+
+                for instance in &mut instances { if (instance.plot_id == session.plot_id) {
+                    // Clear selections.
+                    instance.events.push_back(EditorInstanceEvent::UpdateSelections { packet : SelectionsS2CPacket {
+                        client_uuid : session.client_uuid,
+                        client_name : "".into(),
+                        colour      : 0,
+                        selections  : None
+                    } });
+                } }
+
+                cmds.despawn(entity).await;
+            }
+            continue;
+        }
+
         match (&mut session.session_step) {
 
             EditorSessionStep::Pending { expires_at } => {
@@ -154,19 +178,13 @@ pub(crate) async fn read_session_events(
 
                             C2SPackets::Keepalive(_) => { },
 
-                            C2SPackets::OpenFile(OpenFileC2SPacket { file_id }) => {
-                                state.open_file(file_id);
-                            },
+                            C2SPackets::OpenFile(OpenFileC2SPacket { file_id }) => { state.open_file(file_id); },
 
-                            C2SPackets::CloseFile(CloseFileC2SPacket { file_id }) => {
-                                state.close_file(file_id);
-                            },
+                            C2SPackets::CloseFile(CloseFileC2SPacket { file_id }) => { state.close_file(file_id); },
 
-                            C2SPackets::PatchFile(_) => { },
+                            C2SPackets::PatchFile(PatchFileC2SPacket { file_id, patches }) => { state.patch_file(file_id, patches); },
 
-                            C2SPackets::Selections(SelectionsC2SPacket { selections }) => {
-                                state.update_selections(selections);
-                            }
+                            C2SPackets::Selections(SelectionsC2SPacket { selections }) => { state.update_selections(selections); }
 
                         } },
 
@@ -178,21 +196,6 @@ pub(crate) async fn read_session_events(
                 }
             }
 
-        }
-        if (session.closed == 1) {
-            session.closed = 2;
-
-            for instance in &mut instances { if (instance.plot_id == session.plot_id) {
-                // Clear selections.
-                instance.events.push_back(EditorInstanceEvent::UpdateSelections { packet : SelectionsS2CPacket {
-                    client_uuid : session.client_uuid,
-                    client_name : "".into(),
-                    colour      : 0,
-                    selections  : None
-                } });
-            } }
-
-            cmds.despawn(entity).await;
         }
     }
 }
