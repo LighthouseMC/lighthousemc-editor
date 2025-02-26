@@ -66,12 +66,14 @@ pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) { 
                 for selection in &mut selections {
                     (selection.start, selection.end) = shift_selection(&intermediate_client_text, &new_client_text, selection.start, selection.end);
                 }
+                super::selection_changed();
                 intermediate_client_text = new_client_text;
             }
-            let new_client_text = intermediate_client_text;
+            let new_client_text = intermediate_client_text.to_string();
 
             client_model.set_value(&new_client_text);
 
+            // Update local cursor.
             client_editor.set_selections(selections.into_iter().map(|s| {
                 let start = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.start )).unwrap();
                 let end   = serde_wasm_bindgen::from_value::<EditorPosition>(client_model.get_position_at(s.end   )).unwrap();
@@ -83,6 +85,12 @@ pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) { 
                 }).unwrap()
             }).collect::<Vec<_>>());
 
+            // Update remote cursors.
+            /*for remote_selection in crate::code::remote_cursors::REMOTE_SELECTIONS.write().values_mut() {
+                for selection in &mut remote_selection.selections {
+                    (selection.start, selection.end) = shift_selection(&intermediate_client_text, &new_client_text, selection.start, selection.end);
+                }
+            }*/
             remote_cursors::update_known(file_id, client_editor);
 
             break;
@@ -90,7 +98,7 @@ pub fn apply_patches_from_server(file_id : u64, patches : Patches<Efficient>) { 
     }
 }
 
-pub fn shift_selection(old_client_text : &str, new_client_text : &str, start : usize, end : usize) -> (usize, usize) {
+pub(super) fn shift_selection(old_client_text : &str, new_client_text : &str, start : usize, end : usize) -> (usize, usize) {
     if (start > end) {
         let (end, start) = shift_selection_unchecked(old_client_text, new_client_text, end, start);
         (start, end)
@@ -120,61 +128,57 @@ fn shift_selection_unchecked(old_client_text : &str, new_client_text : &str, sta
     match ((a, b, c, d, e, f, g, h, i, j, k)) {
 
         (false, false, false, false, false, false, false, false, false, false, false)
-        | (false, true, false, false, false, false, false, false, false, false, false)
-        | (true, true, false, false, false, false, false, false, false, false, false)
-        | (false, true, false, true, false, false, false, false, false, false, false)
-        | (false, false, false, false, false, true, false, false, false, false, false)
         | (false, true, false, false, false, false, true, false, false, false, false)
-        | (false, true, false, false, false, true, true, false, true, false, false)
+        | (false, false, false, false, false, true, false, false, false, false, false)
+        | (false, true, false, false, false, false, false, false, false, false, false)
+        | (false, true, false, false, false, true, true, false, false, false, false)
         | (false, true, false, true, false, false, true, false, true, false, true)
-        | (false, true, false, true, false, true, true, false, true, false, true)
-        | (true, true, false, true, true, false, true, false, true, false, true)
-        | (true, true, false, false, true, false, true, false, false, false, false)
-        | (true, false, false, false, true, true, false, false, false, false, false)
-        | (true, true, true, false, true, true, true, true, true, true, false)
-        | (false, true, true, true, false, true, true, true, true, true, true)
+        | (false, true, false, true, false, false, false, false, false, false, false)
+        | (true, true, false, false, false, false, false, false, false, false, false)
+        | (true, true, false, true, false, false, false, false, false, false, false)
         | (false, true, false, false, false, false, true, false, true, false, false)
+        | (false, true, false, false, false, true, true, false, true, false, false)
+        | (false, true, false, true, false, true, true, false, true, false, true)
+        | (true, true, false, true, true, true, true, false, true, false, true)
         | (true, false, false, false, true, false, false, false, false, false, false)
         => (start.saturating_sub_signed(delta), end.saturating_sub_signed(delta)), // Change entirely before selection
 
-        (true, true, true, true, false, false, false, false, false, false, false)
-        | (true, true, true, true, false, false, true, false, false, false, false)
-        | (false, true, true, false, false, false, false, false, false, false, false)
-        | (false, true, true, false, false, false, true, false, false, false, false)
-        | (true, true, true, false, false, false, false, false, false, false, false)
-        | (true, true, true, true, false, false, true, false, true, false, true)
-        | (true, true, true, true, false, false, true, false, true, false, false)
-        | (true, true, true, false, false, true, false, true, false, false, false)
-        | (true, true, false, true, false, false, false, false, false, false, false)
-        => (start, end.saturating_sub_signed(delta)), // Change entirely inside selection
-
-        (true, true, true, true, false, true, true, false, true, false, false)
-        | (true, true, true, true, true, true, true, false, true, false, false)
-        | (true, true, true, true, false, true, true, true, false, false, false)
-        | (true, true, true, true, true, true, true, true, false, false, false)
-        | (true, true, true, true, true, true, true, true, true, false, true)
-        | (true, true, true, true, true, true, true, true, true, true, false)
-        | (true, true, true, true, true, true, true, true, true, true, true)
-        | (true, true, true, true, false, true, true, false, true, false, true)
-        | (true, true, true, true, false, true, true, true, false, true, false)
-        | (true, true, false, true, false, false, true, false, false, false, false)
-        | (true, false, true, false, false, true, false, false, false, false, false)
-        => (start, end), // Change entirely after selection
-
         (false, false, true, false, false, false, false, false, false, false, false)
+        | (false, true, true, false, false, false, false, false, false, false, false)
         => (slice_start, end.saturating_sub_signed(delta)), // Change crosses start of selection, but not end.
 
-        (true, true, true, true, false, true, false, false, false, false, false)
-        | (true, true, true, true, false, true, false, true, false, false, false)
+        (true, true, true, true, false, false, false, false, false, false, false)
+        | (true, true, true, false, false, false, false, false, false, false, false)
+        | (true, true, true, true, false, false, true, false, true, false, false)
+        | (true, true, true, true, false, false, true, false, false, false, false)
+        | (true, true, true, true, false, false, true, false, true, false, true)
+        => (start, end.saturating_sub_signed(delta)), // Change entirely contained within selection
+
+        (true, true, true, true, false, true, false, true, false, false, false)
         | (true, true, true, true, false, true, false, true, false, true, false)
         => (start, slice_end_new), // Change crosses end of selection, but not start
 
-        (false, true, true, false, false, true, false, false, false, false, false)
-        | (false, true, true, false, false, true, false, true, false, false, false)
+        (true, true, true, true, true, true, true, true, true, true, true)
+        | (true, true, true, false, true, true, true, true, true, true, true)
+        | (true, true, false, false, true, true, true, false, true, false, false)
+        | (true, true, true, false, true,true, true, true, false, false, false)
+        | (true, true, true, true, true,true, true, true, true, false, true)
+        | (true, true, true, false, true, true, true, true, true, true, false)
+        | (false, true, true, false, false, true, true, true, false, false, false)
+        | (true, true, true, true, false, true, true, false, true, false, false)
+        | (true, true, true, true, true, true, true, true, true, true, false)
+        | (true, true, true, true, false, true, true, true, false, false, false)
+        | (true, true, true, true, false, true, true, false, true, false, true)
+        | (true, true, true, true, false, true, true, true, false, true, false)
+        | (true, true, true, false, true, true, true, true, false, true, false)
+        => (start, end), // Change entirely after selection
+
+        (false, false, true, false, false, true, false, true, false, false, false)
+        | (false, true, true, false, false, true, false, false, false, false, false)
         | (false, false, true, false, false, true, false, false, false, false, false)
-        | (false, false, true, false, false, true, false, true, false, false, false)
+        | (true, true, true, false, false, true, false, true, false, false, false)
         | (false, false, true, false, false, true, false, true, false, true, false)
-        => (slice_end_new, slice_end_new), // Change entirely overwrites selection
+        => (slice_end_new, slice_end_new), // Change entirely encapsulates selection
 
         _ => {
             crate::warn(&format!("MISSING ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) MISSING", a, b, c, d, e, f, g, h, i, j, k));

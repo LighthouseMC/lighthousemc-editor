@@ -47,21 +47,23 @@ async fn create_session_and_instance(
     let instance = unsafe{ EditorInstance::create(plot_id, database) }.await.unwrap().unwrap();
     cmds.spawn(instance).await;
 
-    let session = unsafe{ EditorSession::create::<2>(
+    let session = unsafe{ EditorSession::create_with(
         plot_id,
         Uuid::new_v4(),
         "Totobirb".into(),
-        Duration::from_secs(60)
+        Duration::from_secs(60),
+        "A".into()
     ) }.unwrap();
-    voxidian_logger::pass!("http://127.0.0.1:5123/editor#{}", session.session_code());
+    voxidian_logger::pass!("http://127.0.0.1:5123/editor#DO-NOT-SHARE_{}", session.session_code());
     cmds.spawn(session).await;
 
-    let session = unsafe{ EditorSession::create::<2>(
+    let session = unsafe{ EditorSession::create_with(
         plot_id,
         Uuid::new_v4(),
-        "Hello".into(),
-        Duration::from_secs(60)
+        "Other Person".into(),
+        Duration::from_secs(60),
+        "B".into()
     ) }.unwrap();
-    voxidian_logger::pass!("http://127.0.0.1:5123/editor#{}", session.session_code());
+    voxidian_logger::pass!("http://127.0.0.1:5123/editor#DO-NOT-SHARE_{}", session.session_code());
     cmds.spawn(session).await;
 }

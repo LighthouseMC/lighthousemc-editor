@@ -53,17 +53,37 @@ impl EditorSession {
     ) -> Result<Self, ()> {
         let mut sesssion_code = [0; SESSION_CODE_LEN];
         let Ok(_) = rand_priv_bytes(&mut sesssion_code) else { return Err(()); };
-        Ok(Self {
+        unsafe{ Self::create_with(
             plot_id,
             client_uuid,
             client_name,
-            session_code : sesssion_code.map(|b| Self::rand_byte_to_char(b)).into_iter().collect::<String>(),
-            session_step : EditorSessionStep::Pending {
-                expires_at : Instant::now() + expires_in
-            },
-            closed       : 0
-        })
+            expires_in,
+            sesssion_code.map(|b| Self::rand_byte_to_char(b)).into_iter().collect::<String>()
+        ) }
     }
+
+        /// # SAFETY:
+        /// Client uuid and the plot together must be unique.
+        /// The plot must be managed by an editor instance.
+        /// The session code must be unique and should be sufficiently unguessable.
+        pub unsafe fn create_with(
+            plot_id      : DBPlotID,
+            client_uuid  : Uuid,
+            client_name  : String,
+            expires_in   : Duration,
+            session_code : String
+        ) -> Result<Self, ()> {
+            Ok(Self {
+                plot_id,
+                client_uuid,
+                client_name,
+                session_code,
+                session_step : EditorSessionStep::Pending {
+                    expires_at : Instant::now() + expires_in
+                },
+                closed       : 0
+            })
+        }
 
     fn rand_byte_to_char(byte : u8) -> char {
         let byte = byte % 64;

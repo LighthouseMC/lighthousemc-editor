@@ -46,8 +46,11 @@ unsafe impl Sync for WebSocketContainer { }
 pub(super) fn start() {
     let     window       = web_sys::window().unwrap();
     let     location     = window.location();
-    let mut session_code = { let s = location.hash().unwrap(); s.strip_prefix("#").unwrap_or(&s).to_string() };
-    location.set_hash("").unwrap();
+    let mut session_code = {
+        let s = location.hash().unwrap();
+        let s = s.strip_prefix("#").unwrap_or(&s);
+        s.strip_prefix("DO-NOT-SHARE_").unwrap_or(&s).to_string()
+    };
     if (session_code.is_empty()) {
         if let Some(Ok((sc))) = cookies::get("voxidian-editor-session") {
             session_code = sc;

@@ -1,6 +1,7 @@
 use crate::state::{ FilesEntry, FilesEntryContents };
 use voxidian_editor_common::packet::s2c::FileContents;
 use wasm_bindgen::prelude::*;
+use web_sys::PointerEvent;
 
 
 pub fn open_file(file_id : u64, path : String) {
@@ -31,6 +32,8 @@ pub fn open_file(file_id : u64, path : String) {
         let filename = path.split("/").last().unwrap();
         let path1 = path.clone();
         let open_callback = Closure::<dyn FnMut() -> ()>::new(move || { crate::state::open_file(file_id, path1.clone(), true); });
+        div.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
+        open_callback.forget();
 
         let icon = document.create_element("div").unwrap();
         icon.class_list().toggle_with_force("editor_filetab_icon", true).unwrap();
@@ -38,21 +41,21 @@ pub fn open_file(file_id : u64, path : String) {
         crate::filetree::set_filename_icon_classes(filename, &icon_inner.class_list());
         icon.append_child(&icon_inner).unwrap();
         div.append_child(&icon).unwrap();
-        icon.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
 
         let name = document.create_element("div").unwrap();
         name.class_list().toggle_with_force("editor_filetab_name", true).unwrap();
         name.set_inner_html(filename);
         div.append_child(&name).unwrap();
-        name.add_event_listener_with_callback("click", open_callback.as_ref().unchecked_ref()).unwrap();
-        open_callback.forget();
 
         let close = document.create_element("div").unwrap();
         close.class_list().toggle_with_force("editor_filetab_close", true).unwrap();
         close.set_inner_html("×");
         div.append_child(&close).unwrap();
         let path1 = path.clone();
-        let close_callback = Closure::<dyn FnMut() -> ()>::new(move || crate::state::close_file(file_id, Some(path1.clone())));
+        let close_callback = Closure::<dyn FnMut(_) -> ()>::new(move |e : PointerEvent| {
+            crate::state::close_file(file_id, Some(path1.clone()));
+            e.stop_propagation();
+        });
         close.add_event_listener_with_callback("click", close_callback.as_ref().unchecked_ref()).unwrap();
         close_callback.forget();
 
