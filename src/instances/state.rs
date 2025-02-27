@@ -1,5 +1,5 @@
-use voxidian_editor_common::packet::s2c::{ InitialStateS2CPacket, FileTreeEntry, FileContents };
-use voxidian_database::{ VoxidianDB, DBPlotID, DBFSDirectoryID, DBFSDirectory, DBFSFileID, DBError };
+use lighthousemc_editor_common::packet::s2c::{ InitialStateS2CPacket, FileTreeEntry, FileContents };
+use lighthousemc_database::{ LighthouseDB, DBPlotID, DBFSDirectoryID, DBFSDirectory, DBFSFileID, DBError };
 use std::collections::BTreeMap;
 
 
@@ -13,7 +13,7 @@ pub struct EditorInstanceState {
 
 impl EditorInstanceState {
 
-    pub async fn load(database : &VoxidianDB, plot_id : DBPlotID) -> Result<Option<Self>, DBError> {
+    pub async fn load(database : &LighthouseDB, plot_id : DBPlotID) -> Result<Option<Self>, DBError> {
         let Some(plot) = database.get_plot(plot_id).await? else { return Ok(None); };
         Ok(Some(Self {
             plot_id,

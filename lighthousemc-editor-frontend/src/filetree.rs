@@ -1,7 +1,7 @@
+use lighthousemc_editor_common::packet::s2c::FileTreeEntry;
 use std::cell::LazyCell;
 use std::sync::{ Mutex, MutexGuard, RwLock };
 use std::cmp::Ordering;
-use voxidian_editor_common::packet::s2c::FileTreeEntry;
 use wasm_bindgen::prelude::*;
 use web_sys::{ DomTokenList, Element, MouseEvent };
 

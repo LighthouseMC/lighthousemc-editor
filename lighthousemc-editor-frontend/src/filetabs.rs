@@ -1,5 +1,5 @@
 use crate::state::{ FilesEntry, FilesEntryContents };
-use voxidian_editor_common::packet::s2c::FileContents;
+use lighthousemc_editor_common::packet::s2c::FileContents;
 use wasm_bindgen::prelude::*;
 use web_sys::PointerEvent;
 

@@ -27,19 +27,19 @@ pub async fn run<A : ToSocketAddrs>(
     let app = Router::new();
 
     // Static assets
-    let app = app.route("/robots.txt",                              routing::get(async || route_asset(mime::TEXT, include_str!   ("assets/misc/robots.txt"                                           ).into_response())));
-    let app = app.route("/assets/image/logo_transparent.png",       routing::get(async || route_asset(mime::PNG,  include_bytes! ("assets/image/logo_transparent.png"                                ).into_response())));
-    let app = app.route("/editor/voxidian_editor_frontend.js",      routing::get(async || route_asset(mime::JS,   include_str!   ("../voxidian-editor-frontend/pkg/voxidian_editor_frontend.js"      ).into_response())));
-    let app = app.route("/editor/voxidian_editor_frontend_bg.wasm", routing::get(async || route_asset(mime::WASM, include_bytes! ("../voxidian-editor-frontend/pkg/voxidian_editor_frontend_bg.wasm" ).into_response())));
+    let app = app.route("/robots.txt",                                  routing::get(async || route_asset(mime::TEXT, include_str!   ("assets/misc/robots.txt"                                                   ).into_response())));
+    let app = app.route("/assets/image/logo_transparent.png",           routing::get(async || route_asset(mime::PNG,  include_bytes! ("assets/image/logo_transparent.png"                                        ).into_response())));
+    let app = app.route("/editor/lighthousemc_editor_frontend.js",      routing::get(async || route_asset(mime::JS,   include_str!   ("../lighthousemc-editor-frontend/pkg/lighthousemc_editor_frontend.js"      ).into_response())));
+    let app = app.route("/editor/lighthousemc_editor_frontend_bg.wasm", routing::get(async || route_asset(mime::WASM, include_bytes! ("../lighthousemc-editor-frontend/pkg/lighthousemc_editor_frontend_bg.wasm" ).into_response())));
 
     // Root
     //let app = app.route("/", routing::get(Html(include_str!("assets/template/root.html").replace("{{DISPLAY_GAME_ADDRESS}}", display_game_address))));
 
     // Editor
     const EDITOR : &'static str = str_replace_multiple!( include_str!("assets/template/editor.html"), [
-        ("{{VOXIDIAN_EDITOR_VERSION}}",      env!("CARGO_PKG_VERSION"           )),
-        ("{{VOXIDIAN_EDITOR_COMMIT}}",       env!("VOXIDIAN_EDITOR_COMMIT"      )),
-        ("{{VOXIDIAN_EDITOR_COMMIT_HASH}}",  env!("VOXIDIAN_EDITOR_COMMIT_HASH" ))
+        ("{{LIGHTHOUSEMC_EDITOR_VERSION}}",      env!("CARGO_PKG_VERSION"               )),
+        ("{{LIGHTHOUSEMC_EDITOR_COMMIT}}",       env!("LIGHTHOUSEMC_EDITOR_COMMIT"      )),
+        ("{{LIGHTHOUSEMC_EDITOR_COMMIT_HASH}}",  env!("LIGHTHOUSEMC_EDITOR_COMMIT_HASH" ))
     ] );
     let app = app.route("/editor", routing::get(Html(EDITOR)));
 
@@ -70,6 +70,6 @@ async fn handle_editor_websocket(
     upgrade : WebSocketUpgrade,
     cmds    : State<Commands>
 ) -> impl IntoResponse {
-    upgrade.protocols(["voxidian-editor"])
+    upgrade.protocols(["lighthousemc-editor"])
         .on_upgrade(async move |socket| crate::peer::handle_editor_websocket(cmds.0, socket).await)
 }

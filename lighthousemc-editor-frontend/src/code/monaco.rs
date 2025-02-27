@@ -244,7 +244,7 @@ pub struct ModelContentChangedEvent {
 pub fn init_theme() {
     require(move || {
 
-        js::define_theme("voxidian", &serde_wasm_bindgen::to_value(&EditorTheme {
+        js::define_theme("lighthousemc", &serde_wasm_bindgen::to_value(&EditorTheme {
             base    : "hc-black".into(),
             inherit : true,
             colours : EditorThemeColours {
@@ -284,7 +284,7 @@ pub fn create(file_id : u64, file_name : &str, initial_script : String, open : b
         let config = EditorConfig {
             value                     : (&initial_script).into(),
             language                  : initial_language.into(),
-            theme                     : "voxidian".into(),
+            theme                     : "lighthousemc".into(),
             auto_detect_high_contrast : false,
             automatic_layout          : true,
             cursor_blinking           : "smooth".into(),

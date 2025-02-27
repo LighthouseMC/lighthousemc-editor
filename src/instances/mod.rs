@@ -1,7 +1,7 @@
 use crate::peer::OutgoingPeerCommand;
-use voxidian_editor_common::packet::s2c::*;
-use voxidian_editor_common::dmp;
-use voxidian_database::{ VoxidianDB, DBPlotID, DBFSFileID, DBError };
+use lighthousemc_editor_common::packet::s2c::*;
+use lighthousemc_editor_common::dmp;
+use lighthousemc_database::{ LighthouseDB, DBPlotID, DBFSFileID, DBError };
 use axecs::prelude::*;
 use std::sync::Arc;
 use std::collections::VecDeque;
@@ -27,7 +27,7 @@ impl EditorInstance {
     /// # Safety:
     /// The plot must not be managed by any other editor instance.
     /// The plot must be locked and unlocked properly, preventing management conflicts with other nodes.
-    pub async unsafe fn create(plot_id : DBPlotID, database : Arc<VoxidianDB>) -> Result<Option<Self>, DBError> {
+    pub async unsafe fn create(plot_id : DBPlotID, database : Arc<LighthouseDB>) -> Result<Option<Self>, DBError> {
         Ok(Some(Self {
             plot_id,
             state   : { let Some(state) = EditorInstanceState::load(&database, plot_id).await? else { return Ok(None); }; state },

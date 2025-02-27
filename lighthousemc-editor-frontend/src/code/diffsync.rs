@@ -4,8 +4,8 @@
 use crate::state::FilesEntryContents;
 use crate::code::monaco::{ self, EditorPosition, EditorSelection, EditorSetSelection };
 use crate::code::remote_cursors;
-use voxidian_editor_common::packet::c2s::PatchFileC2SPacket;
-use voxidian_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };
+use lighthousemc_editor_common::packet::c2s::PatchFileC2SPacket;
+use lighthousemc_editor_common::dmp::{ DiffMatchPatch, Efficient, PatchInput, Patches };
 
 
 pub fn send_patches_to_server() {

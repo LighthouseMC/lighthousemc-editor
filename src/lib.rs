@@ -7,7 +7,7 @@
 
 
 use voxidian_logger::{ debug, info, error };
-use voxidian_database::VoxidianDB;
+use lighthousemc_database::LighthouseDB;
 use axecs::prelude::*;
 use axecs::future::UntilExitFuture;
 use std::io;
@@ -28,7 +28,7 @@ mod util;
 pub struct EditorPlugin {
     bind_addrs        : Vec<SocketAddr>,
     display_game_addr : String,
-    database          : Arc<VoxidianDB>
+    database          : Arc<LighthouseDB>
 }
 
 impl EditorPlugin {
@@ -36,7 +36,7 @@ impl EditorPlugin {
     pub async fn new<A : ToSocketAddrs>(
         bind_addrs        : A,
         display_game_addr : String,
-        database          : Arc<VoxidianDB>
+        database          : Arc<LighthouseDB>
     ) -> io::Result<Self> { Ok(Self {
         bind_addrs        : net::lookup_host(bind_addrs).await?.collect(),
         display_game_addr,

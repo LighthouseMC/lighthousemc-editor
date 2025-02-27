@@ -1,6 +1,6 @@
 use crate::code::monaco::{ self, Editor, EditorDecoration, EditorDecorationOptions, EditorSelection, EditorHoverMessage, EditorPosition };
-use voxidian_editor_common::packet::c2s::SelectionRange;
-use voxidian_editor_common::Uuid;
+use lighthousemc_editor_common::packet::c2s::SelectionRange;
+use lighthousemc_editor_common::Uuid;
 use std::sync::atomic::AtomicBool;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
 use std::cell::LazyCell;

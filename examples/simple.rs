@@ -1,11 +1,11 @@
 #![feature(mpmc_channel)]
 
 
-use voxidian_editor::EditorPlugin;
-use voxidian_editor::instances::EditorInstance;
-use voxidian_editor::instances::session::EditorSession;
+use lighthousemc_editor::EditorPlugin;
+use lighthousemc_editor::instances::EditorInstance;
+use lighthousemc_editor::instances::session::EditorSession;
+use lighthousemc_database::LighthouseDB;
 use voxidian_logger::LOGS;
-use voxidian_database::VoxidianDB;
 use axecs::prelude::*;
 use std::sync::Arc;
 use std::net::SocketAddr;
@@ -21,7 +21,7 @@ async fn main() {
         println!("{}", log.level.stylise(&format!("\x1b[7m[ {} {} ]\x1b[27m {}", log.level.name(), log.time_fmt, log.message)));
     } });
 
-    let db = Arc::new(VoxidianDB::connect(SocketAddr::from_str("127.0.0.1:5432").unwrap()).await.unwrap());
+    let db = Arc::new(LighthouseDB::connect(SocketAddr::from_str("127.0.0.1:5432").unwrap()).await.unwrap());
 
     let mut app = App::new();
     app.add_plugin(CycleSchedulerPlugin);
@@ -39,7 +39,7 @@ async fn main() {
 
 
 async fn create_session_and_instance(
-    In(database) : In<Arc<VoxidianDB>>,
+    In(database) : In<Arc<LighthouseDB>>,
     cmds         : Commands
 ) {
     let plot_id = 6;

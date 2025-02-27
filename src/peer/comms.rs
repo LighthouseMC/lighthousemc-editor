@@ -1,5 +1,5 @@
-use voxidian_editor_common::packet::{ self, PrefixedPacketEncode, PrefixedPacketDecode, DecodeError };
-use voxidian_editor_common::packet::s2c::*;
+use lighthousemc_editor_common::packet::{ self, PrefixedPacketEncode, PrefixedPacketDecode, DecodeError };
+use lighthousemc_editor_common::packet::s2c::*;
 use std::time::Duration;
 use tokio::time::timeout;
 use axum::extract::ws::{ WebSocket, Message as WebSocketMessage };

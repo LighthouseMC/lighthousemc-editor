@@ -1,5 +1,5 @@
-use voxidian_editor_common::packet::s2c::FileTreeEntry;
-use voxidian_editor_common::packet::c2s::*;
+use lighthousemc_editor_common::packet::s2c::FileTreeEntry;
+use lighthousemc_editor_common::packet::c2s::*;
 use std::cell::LazyCell;
 use std::sync::{ RwLock, RwLockReadGuard, RwLockWriteGuard, Mutex };
 use std::collections::{ HashMap, VecDeque };

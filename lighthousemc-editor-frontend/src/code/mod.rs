@@ -4,7 +4,7 @@ pub mod remote_cursors;
 
 
 use crate::code::monaco::{ EditorSelection, EditorPosition };
-use voxidian_editor_common::packet::c2s::{ SelectionsC2SPacket, SelectionRange };
+use lighthousemc_editor_common::packet::c2s::{ SelectionsC2SPacket, SelectionRange };
 use std::sync::atomic::Ordering;
 use wasm_bindgen::prelude::*;
 use web_sys::KeyboardEvent;

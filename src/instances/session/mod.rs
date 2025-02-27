@@ -1,8 +1,8 @@
 use crate::peer::{ OutgoingPeerCommand, IncomingPeerEvent };
 use super::{ EditorInstance, EditorInstanceEvent };
-use voxidian_editor_common::packet::s2c::*;
-use voxidian_editor_common::packet::c2s::*;
-use voxidian_database::DBPlotID;
+use lighthousemc_editor_common::packet::s2c::*;
+use lighthousemc_editor_common::packet::c2s::*;
+use lighthousemc_database::DBPlotID;
 use voxidian_logger::debug;
 use axecs::prelude::*;
 use std::time::{ Instant, Duration };

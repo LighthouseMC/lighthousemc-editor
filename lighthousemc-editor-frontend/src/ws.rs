@@ -1,9 +1,9 @@
 use crate::state::{ FilesEntry, FilesEntryContents };
 use crate::code::remote_cursors::RemoteSelection;
-use voxidian_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
-use voxidian_editor_common::packet::s2c::{ S2CPackets, FileContents };
-use voxidian_editor_common::packet::c2s::*;
-use voxidian_editor_common::dmp::DiffMatchPatch;
+use lighthousemc_editor_common::packet::{ PacketBuf, PacketEncode, PrefixedPacketEncode, PrefixedPacketDecode };
+use lighthousemc_editor_common::packet::s2c::{ S2CPackets, FileContents };
+use lighthousemc_editor_common::packet::c2s::*;
+use lighthousemc_editor_common::dmp::DiffMatchPatch;
 use std::cell::SyncUnsafeCell;
 use std::ops::Deref;
 use std::mem::MaybeUninit;
@@ -52,7 +52,7 @@ pub(super) fn start() {
         s.strip_prefix("DO-NOT-SHARE_").unwrap_or(&s).to_string()
     };
     if (session_code.is_empty()) {
-        if let Some(Ok((sc))) = cookies::get("voxidian-editor-session") {
+        if let Some(Ok((sc))) = cookies::get("lighthousemc-editor-session") {
             session_code = sc;
         } else {
             crate::cover::open_cover_error(&format!("No session code"));
@@ -62,7 +62,7 @@ pub(super) fn start() {
     let cookie_expires = Date::new_0();
     let cookie_expires_hours = 12.0;
     cookie_expires.set_time(cookie_expires.get_time() + (cookie_expires_hours*3600000.0));
-    cookies::set("voxidian-editor-session", &session_code, &cookies::CookieOptions {
+    cookies::set("lighthousemc-editor-session", &session_code, &cookies::CookieOptions {
         path      : Some("/editor"),
         domain    : None,
         expires   : Some(Cow::Owned(cookie_expires.to_utc_string().into())),
@@ -79,7 +79,7 @@ pub(super) fn start() {
     let path     = location.pathname().unwrap();
     let path     = path.trim_end_matches('/');
     let ws_host  = format!("{protocol}//{hostname}:{port}{path}/ws");
-    let ws       = WebSocket::new_with_str(&ws_host, "voxidian-editor").unwrap();
+    let ws       = WebSocket::new_with_str(&ws_host, "lighthousemc-editor").unwrap();
     ws.set_binary_type(BinaryType::Arraybuffer);
 
     let onerror_callback = Closure::<dyn FnMut(_) -> ()>::new(|e| on_ws_error(e));

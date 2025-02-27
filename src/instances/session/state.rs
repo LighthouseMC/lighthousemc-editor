@@ -2,10 +2,10 @@ use crate::peer::OutgoingPeerCommand;
 use crate::instances::{ EditorInstance, EditorInstanceEvent };
 use crate::util::Dirty;
 use super::{ EditorSession, EditorSessionStep };
-use voxidian_editor_common::packet::s2c::*;
-use voxidian_editor_common::packet::c2s::SelectionRange;
-use voxidian_editor_common::dmp;
-use voxidian_database::DBFSFileID;
+use lighthousemc_editor_common::packet::s2c::*;
+use lighthousemc_editor_common::packet::c2s::SelectionRange;
+use lighthousemc_editor_common::dmp;
+use lighthousemc_database::DBFSFileID;
 use axecs::prelude::*;
 use std::collections::{ BTreeMap, VecDeque };
 

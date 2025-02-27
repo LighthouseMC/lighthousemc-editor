@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head id="head">
-        <title>Voxidian Editor</title>
+        <title>LighthouseMC Editor</title>
         <link rel="icon" type="image/png" href="/assets/image/logo_transparent.png">
         <link rel="stylesheet" type='text/css' href="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css" />
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
@@ -505,7 +505,7 @@
 
                     <div id="editor_footer" class="hbox">
                         <div id="editor_footer_left" class="hbox">
-                            <div><a href="https://github.com/LighthouseMC/VoxidianEditor" target="_blank" rel="noopener noreferrer">Voxidian Editor</a> {{VOXIDIAN_EDITOR_VERSION}} (<a href="https://github.com/LighthouseMC/VoxidianEditor/commit/{{VOXIDIAN_EDITOR_COMMIT_HASH}}" target="_blank" rel="noopener noreferrer">{{VOXIDIAN_EDITOR_COMMIT}}</a>)</div>
+                            <div><a href="https://github.com/LighthouseMC/lighthousemc-editor" target="_blank" rel="noopener noreferrer">LighthouseMC Editor</a> {{LIGHTHOUSEMC_EDITOR_VERSION}} (<a href="https://github.com/LighthouseMC/lighthousemc-editor/commit/{{LIGHTHOUSEMC_EDITOR_COMMIT_HASH}}" target="_blank" rel="noopener noreferrer">{{LIGHTHOUSEMC_EDITOR_COMMIT}}</a>)</div>
                         </div>
                         <div id="editor_footer_right" class="hbox" style="visibility: hidden;">
                             <div>Offset <span id="editor_footer_cursor_offset">0</span></div>
@@ -527,7 +527,7 @@
         <script src="https://unpkg.com/monaco-editor@latest/min/vs/loader.js"></script> <!-- Code editor -->
 
         <script type="module"> // WASM
-            import init, * as wasm from "./editor/voxidian_editor_frontend.js";
+            import init, * as wasm from "./editor/lighthousemc_editor_frontend.js";
             init();
         </script>
 

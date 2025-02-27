@@ -1,31 +1,31 @@
 [package]
-name        = "voxidian-editor"
+name        = "lighthousemc-editor"
 version     = "0.1.0"
 authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
 description = "A simple web-based code editor for the Lighthouse Minecraft server (server)."
 license     = "LGPL-3.0"
 
 homepage   = "https://github.com/LighthouseMC"
-repository = "https://github.com/LighthouseMC/VoxidianEditor"
+repository = "https://github.com/LighthouseMC/lighthousemc-editor"
 
 edition = "2024"
 
 [workspace]
 members = [
-    "voxidian-editor-common",
-    "voxidian-editor-frontend"
+    "lighthousemc-editor-common",
+    "lighthousemc-editor-frontend"
 ]
 
 [lints.rust]
 unused_parens = "allow"
 
 
-[dependencies.voxidian-editor-common]
-path = "./voxidian-editor-common"
+[dependencies.lighthousemc-editor-common]
+path = "./lighthousemc-editor-common"
+[dependencies.lighthousemc-database]
+path = "../lighthousemc-database"
 [dependencies.voxidian-logger]
 path = "../voxidian-logger"
-[dependencies.voxidian-database]
-path = "../voxidian-database"
 
 [dependencies.axecs]
 path = "../../ecs/axecs"

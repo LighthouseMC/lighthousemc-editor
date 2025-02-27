@@ -1,12 +1,12 @@
 [package]
-name        = "voxidian-editor-frontend"
+name        = "lighthousemc-editor-frontend"
 version     = "0.1.0"
 authors     = ["LighthouseMC <https://github.com/LighthouseMC>"]
 description = "A simple web-based code editor for the Lighthouse Minecraft server (frontend)."
 license     = "LGPL-3.0"
 
 homepage   = "https://github.com/LighthouseMC"
-repository = "https://github.com/LighthouseMC/VoxidianEditor"
+repository = "https://github.com/LighthouseMC/lighthousemc-editor"
 
 edition = "2024"
 
@@ -19,8 +19,8 @@ crate-type = [ "cdylib" ]
 unused_parens = "allow"
 
 
-[dependencies.voxidian-editor-common]
-path = "../voxidian-editor-common"
+[dependencies.lighthousemc-editor-common]
+path = "../lighthousemc-editor-common"
 
 [dependencies.wasm-bindgen]
 version = "0.2"
