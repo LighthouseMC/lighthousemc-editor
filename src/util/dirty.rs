@@ -9,9 +9,9 @@ pub(crate) struct Dirty<T> {
 
 impl<T> Dirty<T> {
 
-    pub const fn new_dirty(value : T) -> Self {
+    /*pub const fn new_dirty(value : T) -> Self {
         Self { value, dirty : true }
-    }
+    }*/
 
     pub const fn new_clean(value : T) -> Self {
         Self { value, dirty : false }
@@ -21,9 +21,9 @@ impl<T> Dirty<T> {
 
 impl<T> Dirty<T> {
 
-    pub fn mark_dirty(dirty : &mut Self) {
+    /*pub fn mark_dirty(dirty : &mut Self) {
         dirty.dirty = true;
-    }
+    }*/
 
     pub fn take_dirty(dirty : &mut Self) -> bool {
         let was_dirty = dirty.dirty;
@@ -42,9 +42,9 @@ impl<T : PartialEq> Dirty<T> {
         }
     }
 
-    pub fn set_silent(dirty : &mut Self, value : T) {
+    /*pub fn set_silent(dirty : &mut Self, value : T) {
         dirty.value = value;
-    }
+    }*/
 
 }
 

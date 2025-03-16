@@ -1,5 +1,5 @@
 mod dirty;
-pub use dirty::*;
+pub(crate) use dirty::*;
 
 mod macros;
-pub use macros::*;
+pub(crate) use macros::*;

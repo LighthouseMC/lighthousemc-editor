@@ -25,7 +25,7 @@ pub enum IncomingPeerEvent {
 pub(super) async fn handle_editor_websocket(cmds : Commands, mut socket : WebSocket) {
     let Ok(handshake) = comms::read_packet::<HandshakeC2SPacket>(&mut socket).await else { return; };
     let mut socket = Some(socket);
-    cmds.run_system_mut(async move |cmds, instances, sessions| { // FIXME: Not firing. Axecs broken?
+    cmds.run_system(async move |cmds, instances, sessions| { // FIXME: Not firing. Axecs broken?
         try_login_editor_websocket(cmds, socket.take().unwrap(), &handshake, instances, sessions).await;
     }).await;
 }
