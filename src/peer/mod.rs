@@ -3,12 +3,26 @@ use crate::instances::session::{ EditorSession, EditorSessionStep };
 use lighthousemc_editor_common::packet::s2c::*;
 use lighthousemc_editor_common::packet::c2s::*;
 use axecs::prelude::*;
+use core::ops::{ Deref, DerefMut };
 use tokio::sync::mpsc;
 use tokio::task::yield_now;
 use axum::extract::ws::WebSocket;
 
 
 mod comms;
+
+pub struct WebSocketWrapper {
+    socket : WebSocket
+}
+impl Deref for WebSocketWrapper {
+    type Target = WebSocket;
+    fn deref(&self) -> &Self::Target { &self.socket }
+}
+impl DerefMut for WebSocketWrapper {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.socket }
+}
+unsafe impl Send for WebSocketWrapper { }
+unsafe impl Sync for WebSocketWrapper { }
 
 
 pub enum OutgoingPeerCommand {
@@ -24,15 +38,15 @@ pub enum IncomingPeerEvent {
 
 pub(super) async fn handle_editor_websocket(cmds : Commands, mut socket : WebSocket) {
     let Ok(handshake) = comms::read_packet::<HandshakeC2SPacket>(&mut socket).await else { return; };
-    let mut socket = Some(socket);
-    cmds.run_system(async move |cmds, instances, sessions| { // FIXME: Not firing. Axecs broken?
+    let mut socket = Some(WebSocketWrapper { socket });
+    cmds.run_system(async move |cmds, instances, sessions| {
         try_login_editor_websocket(cmds, socket.take().unwrap(), &handshake, instances, sessions).await;
     }).await;
 }
 
 async fn try_login_editor_websocket(
         cmds      : Commands,
-    mut socket    : WebSocket,
+    mut socket    : WebSocketWrapper,
         handshake : &HandshakeC2SPacket<'_>,
     mut instances : Scoped<Entities<(&'static EditorInstance)>>,
     mut sessions  : Scoped<Entities<(&'static mut EditorSession)>>
