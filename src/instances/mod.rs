@@ -36,9 +36,7 @@ impl EditorInstance {
     }
 
 
-    pub fn plot_id(&self) -> DBPlotID {
-        self.plot_id
-    }
+    pub fn plot_id(&self) -> DBPlotID { self.plot_id }
 
 }
 

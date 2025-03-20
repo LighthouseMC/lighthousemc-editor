@@ -51,6 +51,7 @@ pub(super) fn start() {
         let s = s.strip_prefix("#").unwrap_or(&s);
         s.strip_prefix("DO-NOT-SHARE_").unwrap_or(&s).to_string()
     };
+    location.set_hash("").unwrap();
     if (session_code.is_empty()) {
         if let Some(Ok((sc))) = cookies::get("lighthousemc-editor-session") {
             session_code = sc;
